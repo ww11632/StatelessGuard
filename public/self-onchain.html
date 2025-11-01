@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <title>Self Proof 驗證（Celo）｜RWA 合規入口</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    body { font-family: system-ui,-apple-system,Segoe UI,Roboto,Noto Sans,Helvetica,Arial; margin:24px; line-height:1.6; background:#f9fafb; }
+    .container { max-width:1200px; margin:0 auto; }
+    .card { border:1px solid #e5e7eb; border-radius:12px; padding:20px; margin:16px 0; background:white; box-shadow:0 1px 3px rgba(0,0,0,0.1); }
+    .card h3 { margin-top:0; color:#1f2937; }
+    input[type=text]{ width:100%; padding:8px; font-family:ui-monospace,SFMono-Regular,Menlo,monospace; }
+    .ok{ color:#15803d; } .err{ color:#b91c1c; }
+    .hint { color:#6b7280; font-size:13px; margin-top:8px; }
+    .next-steps { margin-top:16px; padding:12px; background:#f3f4f6; border-radius:8px; }
+    .next-steps ul { margin:8px 0 0 0; padding-left:20px; }
+    .demo-tx { font-size:12px; color:#6b7280; margin-top:4px; }
+    .demo-tx code { background:#f3f4f6; padding:2px 4px; border-radius:4px; }
+    .loading { display:inline-block; animation:spin 1s linear infinite; }
+    @keyframes spin { from{transform:rotate(0deg);} to{transform:rotate(360deg);} }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div style="margin-bottom:24px;">
+      <h1 style="margin:0 0 8px 0; font-size:28px; color:#1f2937;">🔗 Chain & Audit ｜ Onchain Verify</h1>
+      <p class="hint" style="color:#6b7280; margin:0; font-size:14px;">RWA 合規入口：Celo 鏈上 Proof 驗證與完整性檢查</p>
+    </div>
+
+  <div class="card">
+    <h3>步驟 1：選擇驗證模式</h3>
+    <div style="margin-bottom:12px;">
+      <label style="margin-right:16px;">
+        <input type="radio" name="verifyMode" value="human" checked id="modeHuman">
+        <strong>Proof-of-Human</strong>（人類身份驗證）
+      </label>
+      <label>
+        <input type="radio" name="verifyMode" value="agent" id="modeAgent">
+        <strong>Proof-of-Agent</strong>（AI Agent 驗證）
+      </label>
+    </div>
+    
+    <div id="humanMode">
+      <label for="txHash">輸入 txHash：</label>
+      <input id="txHash" type="text" placeholder="0x8412...804aa" />
+      <div class="demo-tx">
+        <strong>Demo txHash（展示用）：</strong><br>
+        • <code>DEMO_SUCCESS_TW</code>：模擬成功（TW、已驗證）<br>
+        • <code>DEMO_SUCCESS_US</code>：模擬成功（US、已驗證）<br>
+        • <code>DEMO_FAIL_NOT_FOUND</code>：模擬查無交易<br>
+        • <code>DEMO_FAIL_DENYLISTED</code>：模擬封鎖名單
+      </div>
+    </div>
+    
+    <div id="agentMode" style="display:none;">
+      <label for="agentAddress">輸入 Agent Address：</label>
+      <input id="agentAddress" type="text" placeholder="0xAgentAddress..." />
+      <div class="demo-tx">
+        <strong>Demo Agent Address（展示用）：</strong><br>
+        • <code>0x1234567890abcdef1234567890abcdef12345678</code>：模擬 AI Agent 驗證<br>
+        • <code>0xabcdefabcdefabcdefabcdefabcdefabcdefabcd</code>：另一個範例
+      </div>
+    </div>
+    
+    <div style="margin-top:8px;">
+      <button id="btnVerify" type="button">送出驗證</button>
+      <button id="btnOpenVerify" type="button" style="display:none;">開啟驗鍊器</button>
+    </div>
+    <p id="result"></p>
+  </div>
+
+  <div id="successCard" class="card" style="display:none;">
+    <h3>✅ 驗證成功：已解鎖後續 RWA 流程</h3>
+    <div class="next-steps">
+      <p><strong>下一步操作：</strong></p>
+        <ul>
+          <li><a href="members.html">成員 VC 發行</a>：驗證國籍 / 年齡 / 非 OFAC / 非制裁國</li>
+          <li><button id="btnDocVerify" style="background:none;border:none;color:#3b82f6;text-decoration:underline;cursor:pointer;padding:0;">文件雜湊驗證</button>：驗證租約 / 抵押協議等業務文件（治理循環）</li>
+          <li><button id="btnBylawVerify" style="background:none;border:none;color:#3b82f6;text-decoration:underline;cursor:pointer;padding:0;">章程建議驗證</button>：驗證治理章程與提案（治理循環）</li>
+          <li><a href="payout_verify.html">撥款前核驗</a>：轉移前再次確認身份與名單</li>
+          <li><a href="verify.html">審計日誌驗鍊</a>：檢視所有操作記錄（JSONL 鏈）</li>
+        </ul>
+      <p class="hint">所有操作都會寫入 JSONL 審計日誌，可上鏈驗證完整性。</p>
+    </div>
+  </div>
+
+  <div id="metaCard" class="card" style="display:none;">
+    <h3>診斷資訊</h3>
+    <pre id="metaInfo"></pre>
+  </div>
+
+  </div>
+  <div id="statusSummary"></div>
+  <div id="nav"></div>
+  <script src="js/nav.js?v=20251031v4v3"></script>
+  <script src="js/statusSummary.js"></script>
+  <script src="js/audit.js"></script>
+  <script src="js/config.js"></script>
+  <script src="js/self-onchain.js"></script>
+</body>
+</html>
+
+

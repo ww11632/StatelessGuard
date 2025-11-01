@@ -1,0 +1,29 @@
+{
+  "name": "functions",
+  "private": true,
+  "version": "0.0.1",
+  "type": "commonjs",
+  "main": "lib/index.js",
+  "engines": {
+    "node": "20"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "build": "tsc -p tsconfig.json",
+    "watch": "tsc -w",
+    "serve": "npm run build && firebase emulators:start --only functions,hosting --project demo-self-gate"
+  },
+  "devDependencies": {
+    "@types/node": "^20.19.23",
+    "@types/node-fetch": "^2.6.13",
+    "typescript": "^5.9.3"
+  },
+  "dependencies": {
+    "@types/js-yaml": "^4.0.9",
+    "firebase-admin": "^11.11.1",
+    "firebase-functions": "^4.9.0",
+    "form-data": "^4.0.4",
+    "js-yaml": "^4.1.0",
+    "node-fetch": "^2.7.0"
+  }
+}

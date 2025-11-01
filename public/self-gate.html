@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <title>Self Proof 驗證</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    body { font-family: system-ui,-apple-system,Segoe UI,Roboto,Noto Sans,Helvetica,Arial; margin:24px; line-height:1.6; background:#f9fafb; }
+    .container { max-width:1200px; margin:0 auto; }
+    .card { border:1px solid #e5e7eb; border-radius:12px; padding:20px; margin:16px 0; background:white; box-shadow:0 1px 3px rgba(0,0,0,0.1); }
+    .card h3 { margin-top:0; color:#1f2937; }
+    textarea { width:100%; min-height:160px; font-family:ui-monospace,SFMono-Regular,Menlo,monospace; }
+    button { margin-right:8px; }
+    #result { margin-top:8px; font-weight:700; }
+    .ok { color:#15803d; } .err { color:#b91c1c; }
+    small.hint { color:#6b7280; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div style="margin-bottom:24px;">
+      <h1 style="margin:0 0 8px 0; font-size:28px; color:#1f2937;">🏗️ Core Flow ｜ Gate 驗證</h1>
+      <p class="hint" style="color:#6b7280; margin:0; font-size:14px;">Proof JSON 驗證與審計鏈建立</p>
+    </div>
+
+  <div class="card" id="steps">
+    <p><strong>怎麼玩（像紅綠燈）：</strong></p>
+    <ol>
+      <li>把 Self 產生的 <strong>Proof JSON</strong> 貼進下方白框。</li>
+      <li>按 <strong>送出驗證</strong></li>
+      <li>看到綠字成功後，按 <strong>開啟驗鍊器</strong> 查看證據全綠。</li>
+    </ol>
+    <small class="hint">沒有 Proof？按右邊「一鍵貼入示例」先體驗。</small>
+  </div>
+
+  <div class="card">
+    <label for="proofInput">請貼上 <code>{ "proofData":{...}, "requirements":[...] }</code>：</label>
+    <textarea id="proofInput" placeholder='{"proofData":{"age":20},"requirements":["age>=18"]}'></textarea>
+    <div style="margin-top:8px;">
+      <button id="btnDemo" type="button">一鍵貼入示例</button>
+      <button id="btnVerify" type="button">送出驗證</button>
+      <button id="btnOpenVerify" type="button" style="display:none;">開啟驗鍊器</button>
+    </div>
+    <p id="result"></p>
+  </div>
+
+  <div id="metaCard" class="card" style="display:none;">
+    <h3>診斷資訊（給評審看懂的關鍵）</h3>
+    <pre id="metaInfo"></pre>
+  </div>
+
+  </div>
+  <div id="statusSummary"></div>
+  <div id="nav"></div>
+  <script src="js/nav.js?v=20251031v4v3"></script>
+  <script src="js/statusSummary.js"></script>
+  <script src="js/audit.js"></script>
+  <script src="js/config.js"></script>
+  <script src="js/self-gate.js"></script>
+</body>
+</html>

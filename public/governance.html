@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <title>Governance Dashboard｜StatelessGuard</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    body { font-family: system-ui,-apple-system,Segoe UI,Roboto,Noto Sans,Helvetica,Arial; margin:24px; line-height:1.6; background:#f9fafb; }
+    .container { max-width:1200px; margin:0 auto; }
+    .card { border:1px solid #e5e7eb; border-radius:12px; padding:20px; margin:16px 0; background:white; box-shadow:0 1px 3px rgba(0,0,0,0.1); }
+    .card h3 { margin-top:0; color:#1f2937; }
+    .stat-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:16px; margin:16px 0; }
+    .stat-card { padding:16px; background:#f9fafb; border-radius:8px; border:1px solid #e5e7eb; }
+    .stat-value { font-size:28px; font-weight:700; color:#1f2937; margin:8px 0 4px 0; }
+    .stat-label { font-size:13px; color:#6b7280; }
+    .stat-trend { font-size:12px; color:#10b981; margin-top:4px; }
+    .hash-list { font-family:ui-monospace; font-size:11px; background:#f9fafb; padding:8px; border-radius:6px; max-height:200px; overflow-y:auto; }
+    .hash-item { padding:4px 0; border-bottom:1px solid #e5e7eb; }
+    .hash-item:last-child { border-bottom:none; }
+    table { border-collapse:collapse; width:100%; margin-top:12px; }
+    th, td { padding:8px; text-align:left; border-bottom:1px solid #e5e7eb; }
+    th { background:#f9fafb; font-weight:600; color:#1f2937; font-size:13px; }
+    .badge { display:inline-block; padding:2px 8px; border-radius:12px; font-size:11px; font-weight:600; }
+    .badge.success { background:#dcfce7; color:#166534; }
+    .badge.pending { background:#fef3c7; color:#92400e; }
+    .badge.reviewing { background:#dbeafe; color:#1e40af; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div style="margin-bottom:24px;">
+      <h1 style="margin:0 0 8px 0; font-size:28px; color:#1f2937;">⚖️ Governance ｜ Dashboard</h1>
+      <p class="hint" style="color:#6b7280; margin:0; font-size:14px;">治理總覽：章程提案、會議決議、里程碑認證與上鏈狀態</p>
+    </div>
+
+    <!-- 模組狀態 -->
+    <div class="card">
+      <h3>⚙️ 模組狀態</h3>
+      <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:12px; margin-top:12px;">
+        <div style="padding:12px; background:#f0fdf4; border-radius:8px; border:1px solid #bbf7d0;">
+          <div style="font-weight:600; color:#166534; margin-bottom:4px;">🏗️ Core Flow</div>
+          <div style="font-size:24px; color:#166534;">✅</div>
+          <div style="font-size:11px; color:#6b7280; margin-top:4px;">所有子模組正常</div>
+        </div>
+        <div style="padding:12px; background:#f0fdf4; border-radius:8px; border:1px solid #bbf7d0;">
+          <div style="font-weight:600; color:#166534; margin-bottom:4px;">⚖️ Governance</div>
+          <div style="font-size:24px; color:#166534;">✅</div>
+          <div style="font-size:11px; color:#6b7280; margin-top:4px;">治理流程運行中</div>
+        </div>
+        <div style="padding:12px; background:#f0fdf4; border-radius:8px; border:1px solid #bbf7d0;">
+          <div style="font-weight:600; color:#166534; margin-bottom:4px;">🔗 Chain Sync</div>
+          <div style="font-size:24px; color:#166534;">✅</div>
+          <div style="font-size:11px; color:#6b7280; margin-top:4px;">Celo-Sepolia 連線中</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 統計卡片 -->
+    <div class="card">
+      <h3>📊 治理統計</h3>
+      <div class="stat-grid" id="statGrid">
+        <div class="stat-card">
+          <div class="stat-label">章程提案</div>
+          <div class="stat-value" id="statBylaws">—</div>
+          <div class="stat-trend" id="statBylawsTrend">審核中: 0</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">會議決議</div>
+          <div class="stat-value" id="statMeetings">—</div>
+          <div class="stat-trend">總筆數</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">里程碑認證</div>
+          <div class="stat-value" id="statMilestones">—</div>
+          <div class="stat-trend">已完成</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">驗證次數</div>
+          <div class="stat-value" id="statVerifications">—</div>
+          <div class="stat-trend">審計次數</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 最近 5 筆 JSONL Log Hash -->
+    <div class="card">
+      <h3>🔗 最近 JSONL Log Hash（含 Capsule 連結）</h3>
+      <div id="jsonlHashList" class="hash-list">
+        <p style="color:#9ca3af; margin:0; text-align:center; padding:20px;">載入中...</p>
+      </div>
+    </div>
+
+    <!-- 最近上鏈 Hash 一覽 -->
+    <div class="card">
+      <h3>🔗 最近上鏈 Hash</h3>
+      <div id="hashList" class="hash-list">
+        <p style="color:#9ca3af; margin:0; text-align:center; padding:20px;">載入中...</p>
+      </div>
+    </div>
+
+    <!-- 章程提案狀態 -->
+    <div class="card">
+      <h3>📜 章程提案狀態</h3>
+      <table id="bylawsTable">
+        <thead>
+          <tr>
+            <th>提案 ID</th>
+            <th>Hash</th>
+            <th>時間</th>
+            <th>狀態</th>
+          </tr>
+        </thead>
+        <tbody id="bylawsTableBody">
+          <tr><td colspan="4" style="text-align:center; color:#9ca3af; padding:20px;">無提案記錄</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- 會議決議摘要 -->
+    <div class="card">
+      <h3>🏛️ 會議決議摘要</h3>
+      <table id="meetingsTable">
+        <thead>
+          <tr>
+            <th>日期</th>
+            <th>議題</th>
+            <th>Hash</th>
+            <th>時間</th>
+          </tr>
+        </thead>
+        <tbody id="meetingsTableBody">
+          <tr><td colspan="4" style="text-align:center; color:#9ca3af; padding:20px;">無決議記錄</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+  </div>
+
+  <div id="statusSummary"></div>
+  <div id="nav"></div>
+  <script src="js/nav.js?v=20251031v4v3"></script>
+  <script src="js/statusSummary.js"></script>
+  <script>
+    (function() {
+      // 讀取審計日誌
+      function readAuditLog() {
+        const raw = localStorage.getItem('audit_log_jsonl') || '';
+        if (!raw.trim()) return [];
+        try {
+          return raw.split(/\r?\n/).filter(Boolean).map(line => {
+            try { return JSON.parse(line); } catch { return null; }
+          }).filter(Boolean);
+        } catch {
+          return [];
+        }
+      }
+
+      // 更新統計數據
+      function updateStats() {
+        const entries = readAuditLog();
+        
+        // 統計各類型記錄
+        const bylaws = entries.filter(e => e.action === 'BYLAWS_HASH' || e.action === 'BYLAWS_PROPOSED');
+        const meetings = entries.filter(e => e.action === 'MEETING_DECIDED');
+        const milestones = entries.filter(e => e.action === 'MILESTONE_CERTIFIED');
+        const verifications = entries.filter(e => e.action && (e.action.includes('VERIFY') || e.action.includes('VERIFICATION'))).length;
+
+        // 更新統計卡片
+        document.getElementById('statBylaws').textContent = bylaws.length;
+        document.getElementById('statBylawsTrend').textContent = `審核中: ${bylaws.filter(b => !b.data_hash).length}`;
+        document.getElementById('statMeetings').textContent = meetings.length;
+        document.getElementById('statMilestones').textContent = milestones.length;
+        const verificationsEl = document.getElementById('statVerifications');
+        if (verificationsEl) {
+          verificationsEl.textContent = verifications || entries.length;
+        }
+
+        // 更新 Hash 列表
+        const hashListEl = document.getElementById('hashList');
+        const recentHashes = entries
+          .filter(e => e.data_hash || e.record_hash)
+          .slice(-10)
+          .reverse();
+        
+        if (recentHashes.length === 0) {
+          if (hashListEl) {
+            hashListEl.innerHTML = '<p style="color:#9ca3af; margin:0; text-align:center; padding:20px;">尚無上鏈記錄</p>';
+          }
+        } else {
+          if (hashListEl) {
+            hashListEl.innerHTML = recentHashes.map((entry, idx) => {
+              const hash = entry.data_hash || entry.record_hash || 'N/A';
+              const shortHash = hash.length > 30 ? hash.slice(0, 15) + '...' + hash.slice(-10) : hash;
+              const ts = entry.ts ? new Date(entry.ts).toLocaleString('zh-TW', { 
+                month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit'
+              }) : '—';
+              return `<div class="hash-item">
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                  <code style="color:#2563eb;">${shortHash}</code>
+                  <span style="color:#9ca3af; font-size:10px;">${ts}</span>
+                </div>
+              </div>`;
+            }).join('');
+          }
+        }
+
+        // 更新最近 5 筆 JSONL Log Hash（含 Capsule 連結）
+        const jsonlHashListEl = document.getElementById('jsonlHashList');
+        if (jsonlHashListEl) {
+          const recentEntries = entries.slice(-5).reverse();
+          if (recentEntries.length === 0) {
+            jsonlHashListEl.innerHTML = '<p style="color:#9ca3af; margin:0; text-align:center; padding:20px;">尚無記錄</p>';
+          } else {
+            jsonlHashListEl.innerHTML = recentEntries.map(entry => {
+              const recordHash = entry.record_hash || 'N/A';
+              const capsuleHash = entry.capsuleHash || entry.capsule_hash || entry.data_hash || 'N/A';
+              const shortRecordHash = recordHash.length > 20 ? recordHash.slice(0, 10) + '...' + recordHash.slice(-8) : recordHash;
+              const shortCapsuleHash = capsuleHash.length > 20 ? capsuleHash.slice(0, 10) + '...' + capsuleHash.slice(-8) : capsuleHash;
+              const action = entry.action || 'N/A';
+              const ts = entry.ts ? new Date(entry.ts).toLocaleString('zh-TW', { 
+                month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit'
+              }) : '—';
+              return `<div class="hash-item" style="padding:8px 0;">
+                <div style="margin-bottom:4px;">
+                  <span style="font-size:10px; color:#6b7280;">${action}</span>
+                  <span style="font-size:10px; color:#9ca3af; margin-left:8px;">${ts}</span>
+                </div>
+                <div style="font-size:10px;">
+                  <span style="color:#6b7280;">Record:</span> <code style="color:#2563eb; font-family:ui-monospace;">${shortRecordHash}</code>
+                  ${capsuleHash !== 'N/A' ? `<br><span style="color:#6b7280;">Capsule:</span> <code style="color:#10b981; font-family:ui-monospace;">${shortCapsuleHash}</code>` : ''}
+                </div>
+              </div>`;
+            }).join('');
+          }
+        }
+
+        // 更新章程提案表
+        const bylawsBody = document.getElementById('bylawsTableBody');
+        if (bylaws.length === 0) {
+          bylawsBody.innerHTML = '<tr><td colspan="4" style="text-align:center; color:#9ca3af; padding:20px;">無提案記錄</td></tr>';
+        } else {
+          bylawsBody.innerHTML = bylaws.slice(-10).reverse().map(b => {
+            const hash = b.data_hash || b.record_hash || 'N/A';
+            const shortHash = hash.length > 20 ? hash.slice(0, 10) + '...' + hash.slice(-8) : hash;
+            const ts = b.ts ? new Date(b.ts).toLocaleString('zh-TW') : '—';
+            const status = b.data_hash ? 'success' : 'reviewing';
+            const statusText = b.data_hash ? '已上鏈' : '審核中';
+            return `<tr>
+              <td><code style="font-size:11px;">${b.ref || 'N/A'}</code></td>
+              <td><code style="font-size:11px; font-family:ui-monospace;">${shortHash}</code></td>
+              <td style="font-size:12px; color:#6b7280;">${ts}</td>
+              <td><span class="badge ${status}">${statusText}</span></td>
+            </tr>`;
+          }).join('');
+        }
+
+        // 更新會議決議表
+        const meetingsBody = document.getElementById('meetingsTableBody');
+        if (meetings.length === 0) {
+          meetingsBody.innerHTML = '<tr><td colspan="4" style="text-align:center; color:#9ca3af; padding:20px;">無決議記錄</td></tr>';
+        } else {
+          meetingsBody.innerHTML = meetings.slice(-10).reverse().map(m => {
+            const hash = m.data_hash || m.record_hash || 'N/A';
+            const shortHash = hash.length > 20 ? hash.slice(0, 10) + '...' + hash.slice(-8) : hash;
+            const ts = m.ts ? new Date(m.ts).toLocaleString('zh-TW') : '—';
+            const ref = m.ref || '';
+            const date = ref.includes(':') ? ref.split(':')[1] : '—';
+            const title = ref.includes(':') ? ref.split(':').slice(2).join(':') : '—';
+            return `<tr>
+              <td style="font-size:12px;">${date}</td>
+              <td style="font-size:12px;">${title.length > 40 ? title.slice(0, 40) + '...' : title}</td>
+              <td><code style="font-size:11px; font-family:ui-monospace;">${shortHash}</code></td>
+              <td style="font-size:12px; color:#6b7280;">${ts}</td>
+            </tr>`;
+          }).join('');
+        }
+      }
+
+      // 初始化
+      updateStats();
+      
+      // 定期更新（每 3 秒）
+      setInterval(updateStats, 3000);
+
+      // 監聽 localStorage 變化（如果其他頁面更新了日誌）
+      window.addEventListener('storage', () => {
+        updateStats();
+      });
+    })();
+  </script>
+</body>
+</html>

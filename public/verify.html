@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <title>審計日誌驗鍊器｜RWA Housing Governance MVP</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Noto Sans,Helvetica,Arial;margin:24px;line-height:1.6;background:#f9fafb;}
+    .container { max-width:1200px; margin:0 auto; }
+    .card{border:1px solid #e5e7eb;border-radius:12px;padding:20px;margin:16px 0;background:white;box-shadow:0 1px 3px rgba(0,0,0,0.1);}
+    .card h3 { margin-top:0; color:#1f2937; }
+    table{border-collapse:collapse;width:100%}
+    td,th{border:1px solid #e5e7eb;padding:6px}
+    .ok{color:#15803d;}.bad{color:#b91c1c;}
+    .hint { color:#6b7280; font-size:13px; }  
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div style="margin-bottom:24px;">
+      <h1 style="margin:0 0 8px 0; font-size:28px; color:#1f2937;">🔗 Chain & Audit ｜ JSONL Logs</h1>
+      <p class="hint" style="color:#6b7280; margin:0; font-size:14px;">審計日誌驗鍊器與完整性檢查</p>
+    </div>
+  <!-- ====== 流程精靈（與 members.html 同款） ====== -->
+<div class="card" id="flow-wizard">
+  <label style="margin-top:0;">我要測試哪一條驗證流程？</label>
+  <div style="display:flex;gap:12px;flex-wrap:wrap;">
+    <label><input type="radio" name="flow" value="A" checked> A：日誌驗鍊（留在本頁）</label>
+    <label><input type="radio" name="flow" value="B"> B：成員 VC 發行（members.html）</label>
+    <label><input type="radio" name="flow" value="C"> C：撥款前核驗（payout_verify.html）</label>
+    <label><input type="radio" name="flow" value="E"> E：我還不確定（先看提示）</label>
+  </div>
+  <div class="actions" style="margin-top:12px;">
+    <button id="btnStartFlow" type="button">開始</button>
+    <span id="flowHint" class="hint"></span>
+  </div>
+</div>
+<!-- ====== /流程精靈 ====== -->
+
+  <div class="card">
+    <label>上傳 audit_log.jsonl</label>
+    <input id="logFile" type="file" accept=".jsonl,.txt" />
+    <button id="btnCheck">驗鍊</button>
+    <label style="margin-left:8px;">
+  <input id="strict" type="checkbox" checked>
+  嚴格模式（同時檢查 prev_hash + record_hash）
+</label>
+<button id="btnFix" type="button">補寫 record_hash 並另存</button>
+
+  </div>
+
+  <div class="card">
+    <table id="tbl"><thead>
+      <tr><th>#</th><th>action</th><th>ref</th><th>prev_hash 連結</th><th>record_hash 重算</th></tr>
+    </thead><tbody></tbody></table>
+    <p id="summary"></p>
+  </div>
+
+  </div>
+  <div id="statusSummary"></div>
+  <div id="nav"></div>
+  <script src="js/nav.js?v=20251031v4v3"></script>
+  <script src="js/statusSummary.js"></script>
+  <script>
+ async function sha256Hex(input){
+  const ab = (input instanceof ArrayBuffer) ? input : new TextEncoder().encode(input);
+  const dig = await crypto.subtle.digest('SHA-256', ab);
+  return Array.from(new Uint8Array(dig)).map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+
+async function calcRecordHash(o){
+  const plain = JSON.stringify({
+    ts:o.ts, actor:o.actor, action:o.action,
+    ref:o.ref, data_hash:o.data_hash, prev_hash:o.prev_hash
+  });
+  return await sha256Hex(plain);
+}
+
+function parseJsonlSafe(text){
+  const out=[]; const lines=text.split('\n');
+  for(let i=0;i<lines.length;i++){
+    const s=lines[i].trim(); if(!s) continue;
+    try{ out.push(JSON.parse(s)); }
+    catch(e){ console.warn('第',i+1,'行 JSON 解析失敗'); }
+  }
+  return out;
+}
+function downloadText(filename, text) {
+  const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+ document.getElementById('btnCheck').addEventListener('click', async () => {
+  const strict = document.getElementById('strict')?.checked ?? true;
+    const summary = document.getElementById('summary');
+  const f = document.getElementById('logFile').files[0];
+  if (!f) { alert('請先選擇 audit_log.jsonl'); return; }
+  const text = await f.text();
+  const rows = parseJsonlSafe(text);
+
+ 
+
+  const tbody = document.querySelector('#tbl tbody');
+  tbody.innerHTML = '';
+  let ok = true;
+
+  for (let i = 0; i < rows.length; i++) {
+    const r = rows[i];
+    const prevStr = i > 0 ? JSON.stringify(rows[i - 1]) : null;
+    const expectPrev = i > 0 ? await sha256Hex(prevStr) : null;
+    const okPrev = (r.prev_hash ?? null) === expectPrev;
+
+    const recHash = await calcRecordHash(r);
+    const okRec = r.record_hash === recHash;
+
+    const tr = document.createElement('tr');
+    tr.innerHTML =
+      `<td>${i + 1}</td>` +
+      `<td>${r.ts || ''}</td>` +
+      `<td>${r.action || ''}</td>` +
+      `<td>${r.ref || ''}</td>` +
+      `<td>${okPrev ? '<span class="ok">OK</span>' : '<span class="bad">BAD</span>'}</td>` +
+      `<td>${okRec ? '<span class="ok">OK</span>' : '<span class="bad">BAD</span>'}</td>`;
+    tbody.appendChild(tr);
+
+    ok = strict ? (ok && okPrev && okRec) : (ok && okPrev);
+  }
+
+  summary.textContent = `${ok ? '整本驗鍊通過 ✅' : '整本驗鍊失敗 ❌'}（共 ${rows.length} 筆）`;
+});
+document.getElementById('btnFix').addEventListener('click', async ()=>{
+  const f = document.getElementById('logFile').files[0];
+  if(!f){ alert('請先選擇 audit_log.jsonl'); return; }
+  const text = await f.text();
+  const rows = parseJsonlSafe(text);
+
+  for (let i=0;i<rows.length;i++){
+    const prev = i>0 ? await sha256Hex(JSON.stringify(rows[i-1])) : null;
+    rows[i].prev_hash = prev;
+    rows[i].record_hash = await calcRecordHash(rows[i]);
+  }
+  const fixed = rows.map(x=>JSON.stringify(x)).join('\n');
+  const ts = new Date().toISOString().replace(/[-:.TZ]/g,'').slice(0,14);
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([fixed],{type:'application/jsonl;charset=utf-8'}));
+  a.download = `audit_log_fixed_${ts}.jsonl`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+});
+</script>
+
+<script>
+(function initWizard(){
+  const start = document.getElementById('btnStartFlow');
+  const hint  = document.getElementById('flowHint');
+  if (!start) return;
+
+  start.addEventListener('click', () => {
+    const v = (document.querySelector('input[name="flow"]:checked')||{}).value || 'A';
+    if (v === 'A') {
+      // 留在本頁做「日誌驗鍊」
+      hint.textContent = '請先上傳 audit_log.jsonl，然後按「驗鍊」，若缺 record_hash 可按上方按鈕補寫再另存。';
+      hint.style.color = '#15803d';
+    } else if (v === 'B') {
+      location.href = 'members.html?guide=from_verify';
+    } else if (v === 'C') {
+      location.href = 'payout_verify.html?guide=from_verify';
+    } else {
+      // E：先看說明，不跳頁（最保守）
+      hint.textContent = '先看一下上面的選項與步驟說明，確認想測哪條路線，再按開始。';
+      hint.style.color = '#6b7280';
+    }
+  });
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,44 @@
+[
+  {
+    "txHash": "0x1010ac448cbc6f7730b3446fb4ab5cbc8aa8f2c072d7f220f53907c979720a1f",
+    "subject": "did:web:example.com:user1",
+    "country": "TW",
+    "age_verified": true,
+    "ofac_checked": true,
+    "sanctioned": false
+  },
+  {
+    "txHash": "0xac72f876ea75b64a2162e5e667ec597cbac75b847038bc19a9e397e8ac17e0ee",
+    "subject": "did:web:example.com:user2",
+    "country": "US",
+    "age_verified": true,
+    "ofac_checked": true,
+    "sanctioned": false
+  },
+  {
+    "txHash": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "subject": "did:web:example.com:userA",
+    "country": "TW",
+    "age_verified": true,
+    "ofac_checked": true,
+    "sanctioned": false
+  },
+  {
+    "txHash": "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "subject": "did:web:example.com:userB",
+    "country": "US",
+    "age_verified": true,
+    "ofac_checked": true,
+    "sanctioned": false
+  },
+  {
+    "txHash": "0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "subject": "agent:0xAgentAddress1234567890abcdef",
+    "agentAddress": "0xAgentAddress1234567890abcdef",
+    "country": "TW",
+    "age_verified": true,
+    "ofac_checked": true,
+    "sanctioned": false
+  }
+]
+

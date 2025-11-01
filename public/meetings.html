@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>會議決議｜RWA Housing Governance</title>
+  <style>
+    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Noto Sans,Helvetica,Arial;margin:24px;line-height:1.6;background:#f9fafb;}
+    .container { max-width:1200px; margin:0 auto; }
+    .card{border:1px solid #e5e7eb;border-radius:12px;padding:20px;margin:16px 0;background:white;box-shadow:0 1px 3px rgba(0,0,0,0.1);}
+    .card h3 { margin-top:0; color:#1f2937; }
+    label{display:block;margin:8px 0 4px}
+    textarea{width:100%;min-height:120px}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div id="nav"></div><script src="js/nav.js?v=20251031v4v3"></script>
+    <div style="margin-bottom:24px; margin-top:24px;">
+      <h1 style="margin:0 0 8px 0; font-size:28px; color:#1f2937;">⚖️ Governance ｜ 會議決議</h1>
+      <p class="hint" style="color:#6b7280; margin:0; font-size:14px;">會議決議紀錄與治理決策追蹤</p>
+    </div>
+
+  <div class="card">
+    <label>日期</label><input id="date" type="date"/>
+    <label>議題標題</label><input id="title" placeholder="例如：第 12 次委員會"/>
+    <label>決議內容（摘要）</label><textarea id="resolution" placeholder="決議文字…"></textarea>
+    <label>出席名單（逗號分隔，可選）</label><input id="attendees" placeholder="Alice,Bob,Carol"/>
+    <label>簽發者（issuer）</label><input id="issuer" value="RWA-Housing-Governance-MVP"/>
+
+    <div style="margin-top:12px">
+      <button id="btnRecord">① 紀錄決議並寫入日誌</button>
+      <button id="btnExport">匯出日誌</button>
+    </div>
+    <div style="margin-top:12px">摘要雜湊：<code id="hashOut"></code></div>
+  </div>
+
+  <script>
+
+    function nowISO(){ return new Date().toISOString(); }
+async function sha256Hex(input){
+  const ab = (input instanceof ArrayBuffer) ? input : new TextEncoder().encode(input);
+  const d = await crypto.subtle.digest('SHA-256', ab);
+  return Array.from(new Uint8Array(d)).map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+
+  function readAudit(){ const raw = localStorage.getItem('audit_log_jsonl')||''; 
+  if(!raw.trim()) return []; 
+  return raw.trim().split('\n').filter(Boolean).map(JSON.parse); }
+function writeAudit(lines){ 
+  localStorage.setItem('audit_log_jsonl', lines.map(JSON.stringify).join('\n')); }
+async function calcRecordHash(rec){ 
+  const plain = JSON.stringify({ts:rec.ts,actor:rec.actor,action:rec.action,ref:rec.ref,data_hash:rec.data_hash,prev_hash:rec.prev_hash});
+  return await sha256Hex(plain); }
+
+function exportAudit(){
+  const lines = readAudit();
+  const blob  = new Blob(lines.map(x=>JSON.stringify(x)+'\n'), {type:'application/jsonl;charset=utf-8'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'audit_log.jsonl';
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+    document.getElementById('btnRecord').addEventListener('click', async ()=>{
+      const date=document.getElementById('date').value || new Date().toISOString().slice(0,10);
+      const title=document.getElementById('title').value.trim(); if(!title){ alert('請輸入標題'); return; }
+      const resolution=document.getElementById('resolution').value.trim(); if(!resolution){ alert('請輸入決議內容'); return; }
+      const people=(document.getElementById('attendees').value||'').trim();
+      const issuer=document.getElementById('issuer').value.trim()||'admin@rwa';
+
+      const payload = {date,title,resolution,attendees:people?people.split(',').map(s=>s.trim()):[]};
+      const h = await sha256Hex(JSON.stringify(payload));
+      document.getElementById('hashOut').textContent=h;
+
+      const lines=readAuditLines(); const prev=lines.length? await sha256Hex(JSON.stringify(lines[lines.length-1])): null;
+      const rec = { ts:nowISO(), actor:issuer, action:'MEETING_DECIDED', ref:'meeting:'+date+':'+title, data_hash:h, prev_hash:prev, record_hash:null };
+      rec.record_hash = await calcRecordHash(rec); lines.push(rec);
+writeAudit(lines);
+
+      alert('已寫入會議決議審計紀錄');
+    });
+    document.getElementById('btnExport').addEventListener('click', exportAudit);
+  </script>
+  <div id="statusSummary"></div>
+  <script src="js/statusSummary.js"></script>
+  </div>
+</body>
+</html>

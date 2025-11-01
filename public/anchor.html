@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <title>文件雜湊（上鏈前準備）｜RWA Housing Governance MVP</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Noto Sans,Helvetica,Arial;margin:24px;line-height:1.6;background:#f9fafb;}
+    .container { max-width:1200px; margin:0 auto; }
+    .card{border:1px solid #e5e7eb;border-radius:12px;padding:20px;margin:16px 0;background:white;box-shadow:0 1px 3px rgba(0,0,0,0.1);}
+    .card h3 { margin-top:0; color:#1f2937; }
+    input[type=file]{margin:6px 0}
+    code{user-select:all}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div style="margin-bottom:24px;">
+      <h1 style="margin:0 0 8px 0; font-size:28px; color:#1f2937;">⚖️ Governance ｜ 文件雜湊</h1>
+      <p class="hint" style="color:#6b7280; margin:0; font-size:14px;">文件雜湊計算與上鏈前準備</p>
+    </div>
+
+  <div class="card">
+
+    <div>SHA-256 雜湊：<code id="hashOut"></code></div>
+    <div style="margin-top:12px;">
+         <label>選擇檔案</label>
+<input id="file" type="file" />
+      <button id="btnHash">計算雜湊並寫入審計日誌</button>
+      <button id="btnExport">匯出日誌（audit_log.jsonl）</button>
+    </div>
+  </div>
+
+  </div>
+  <div id="statusSummary"></div>
+  <div id="nav"></div>
+  <script src="js/nav.js?v=20251031v4v3"></script>
+  <script src="js/statusSummary.js"></script>
+  <script>
+  // 共同小工具（唯一版本）
+async function onAnchorHash(){
+ const fileInput = document.getElementById('file');
+const files = fileInput && fileInput.files ? fileInput.files : [];
+if (!files.length) { alert('請先選檔'); return; }
+const f = files[0];
+
+
+  const issuer = (document.getElementById('issuer')?.value || 'RWA-Housing-Governance-MVP').trim();
+  const buf = await f.arrayBuffer();
+  const h = await crypto.subtle.digest('SHA-256', buf);
+  const hex = Array.from(new Uint8Array(h)).map(b=>b.toString(16).padStart(2,'0')).join('');
+  document.getElementById('hashOut').textContent = hex;
+
+  const lines = readAudit();
+  const prev = lines.length ? await crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify(lines[lines.length-1]))) : null;
+  const prev_hex = prev && Array.from(new Uint8Array(prev)).map(b=>b.toString(16).padStart(2,'0')).join('');
+
+  const rec = {
+    ts: new Date().toISOString(),
+    actor: issuer,
+    action: 'ANCHOR_HASHED',
+    ref: 'file:' + f.name,
+    data_hash: hex,
+    prev_hash: prev_hex || null,
+    record_hash: null
+  };
+  rec.record_hash = await calcRecordHash(rec);
+  pushUnique(lines, rec);
+  writeAudit(lines);
+  alert('已把文件雜湊寫入審計日誌');
+}
+
+function nowISO(){ return new Date().toISOString(); }
+
+async function sha256Hex(input){
+  const ab = (input instanceof ArrayBuffer) ? input : new TextEncoder().encode(input);
+  const d  = await crypto.subtle.digest('SHA-256', ab);
+  return Array.from(new Uint8Array(d)).map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+
+function readAudit(){
+  const raw = localStorage.getItem('audit_log_jsonl') || '';
+  if (!raw.trim()) return [];
+  return raw.split(/\r?\n/).map(s=>s.trim()).filter(Boolean).map(JSON.parse);
+}
+function writeAudit(lines){
+  localStorage.setItem('audit_log_jsonl', lines.map(JSON.stringify).join('\n'));
+}
+async function calcRecordHash(rec){
+  const plain = JSON.stringify({
+    ts:rec.ts, actor:rec.actor, action:rec.action,
+    ref:rec.ref, data_hash:rec.data_hash, prev_hash:rec.prev_hash
+  });
+  const buf = new TextEncoder().encode(plain);
+  const d = await crypto.subtle.digest('SHA-256', buf);
+  return Array.from(new Uint8Array(d)).map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+function pushUnique(lines, rec){
+  const sig = `${rec.action}|${rec.ref}|${rec.data_hash}`;
+  const seen = new Set(lines.map(x => `${x.action}|${x.ref}|${x.data_hash}`));
+  if (!seen.has(sig)) lines.push(rec);
+}
+function onExportLog(){
+  const raw = localStorage.getItem('audit_log_jsonl') || '';
+  const blob = new Blob([raw], {type:'application/jsonl;charset=utf-8'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  const ts = new Date().toISOString().replace(/[-:.TZ]/g,'').slice(0,14);
+const who = (document.getElementById('issuer')?.value || 'rwa').replace(/\W+/g,'-');
+a.download = `audit_log_${ts}_${who}.jsonl`;
+
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+document.getElementById('btnHash')?.addEventListener('click', onAnchorHash);
+document.getElementById('btnExport')?.addEventListener('click', onExportLog);
+
+  </script>
+</body>
+</html>

@@ -1,0 +1,30 @@
+version: 2025-10-31
+default_action: deny
+rules:
+  - id: require-self-proof
+    when: proof.source == "self.celo.sepolia" || proof.source == "self.celo.mainnet"
+    effect: allow
+    description: "必須使用 Self proof 來源"
+  
+  - id: agent-mode-sandbox-threshold
+    when: context == "agent" && sandbox_score >= 0.9
+    effect: allow
+    description: "Agent 模式需通過 sandbox 安全閾值"
+  
+  - id: block-low-sandbox-score
+    when: sandbox_score < 0.5
+    effect: deny
+    description: "sandbox_score 過低，拒絕授權"
+  
+  - id: require-delegation-scope
+    when: delegation_scope != null && len(delegation_scope) > 0
+    effect: allow
+    description: "必須定義授權範圍"
+  
+  - id: require-whitelist
+    when: agent_address in whitelist
+    effect: allow
+    description: "Agent 地址必須在白名單中"
+
+
+

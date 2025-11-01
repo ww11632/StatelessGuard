@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>里程碑認證｜RWA Housing Governance</title>
+  <style>
+    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Noto Sans,Helvetica,Arial;margin:24px;line-height:1.6;background:#f9fafb;}
+    .container { max-width:1200px; margin:0 auto; }
+    .card{border:1px solid #e5e7eb;border-radius:12px;padding:20px;margin:16px 0;background:white;box-shadow:0 1px 3px rgba(0,0,0,0.1);}
+    .card h3 { margin-top:0; color:#1f2937; }
+    label{display:block;margin:8px 0 4px}
+    textarea{width:100%;min-height:100px}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div id="nav"></div><script src="js/nav.js?v=20251031v4v3"></script>
+    <div style="margin-bottom:24px; margin-top:24px;">
+      <h1 style="margin:0 0 8px 0; font-size:28px; color:#1f2937;">⚖️ Governance ｜ 里程驗證</h1>
+      <p class="hint" style="color:#6b7280; margin:0; font-size:14px;">里程碑認證與進度追蹤</p>
+    </div>
+
+  <div class="card">
+    <label>里程碑編號</label><input id="mid" placeholder="例如 M-001"/>
+    <label>敘述</label><textarea id="desc" placeholder="施工/驗收內容…"></textarea>
+    <label>狀態</label>
+    <select id="status">
+      <option value="DECLARED">申報</option>
+      <option value="IN_REVIEW">審查中</option>
+      <option value="ATTESTED">已認證</option>
+      <option value="REJECTED">退回</option>
+    </select>
+    <label>簽發者（issuer）</label><input id="issuer" value="RWA-Housing-Governance-MVP"/>
+
+    <div style="margin-top:12px">
+      <button id="btnAttest">① 認證並寫入日誌</button>
+      <button id="btnExport">匯出日誌</button>
+      <button id="btnReport" type="button">匯出里程碑簽章報告</button>
+    </div>
+    <div style="margin-top:12px">摘要雜湊：<code id="hashOut"></code></div>
+  </div>
+
+  <script>
+    function nowISO(){ return new Date().toISOString(); }
+    async function sha256Hex(s){ const buf=new TextEncoder().encode(s); const d=await crypto.subtle.digest('SHA-256',buf); return Array.from(new Uint8Array(d)).map(b=>b.toString(16).padStart(2,'0')).join(''); }
+   function readAudit(){ 
+  const raw = localStorage.getItem('audit_log_jsonl') || '';
+  if(!raw.trim()) return [];
+  return raw.trim().split('\n').filter(Boolean).map(JSON.parse);
+}
+function writeAudit(lines){
+  const txt = lines.map(JSON.stringify).join('\n');
+  localStorage.setItem('audit_log_jsonl', txt);
+}
+
+ function appendAudit(rec){
+    const lines = readAudit();         
+    pushUnique(lines, rec);            
+    writeAudit(lines);                  
+  }
+
+async function calcRecordHash(rec){
+  const flat = [rec.ts, rec.actor, rec.action, rec.ref, rec.data_hash, rec.prev_hash ?? ''].join('|');
+  return await sha256Hex(flat);
+}
+   
+   function pushUnique(lines, rec){
+  const sig  = `${rec.action}|${rec.ref}|${rec.data_hash}`;
+  const seen = new Set(lines.map(x => `${x.action}|${x.ref}|${x.data_hash}`));
+  if(!seen.has(sig)) lines.push(rec);
+  return lines;
+}
+
+ function exportAudit(){
+    const lines = readAudit();  // ✅ 統一來源
+    const blob  = new Blob(lines.map(x => JSON.stringify(x) + '\n'), { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'audit_log.jsonl';     // ✅ 與站內其餘頁一致
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
+
+function exportMilestoneReport(){
+  const lines = readAudit();
+  if(!lines.length){ alert('目前還沒有任何紀錄'); return; }
+  const rec = lines[lines.length - 1];                 // 只針對最新一筆里程碑
+  const pretty = [
+    '【里程碑簽章報告】',
+    `時間(ts):         ${rec.ts}`,
+    `簽發者(actor):    ${rec.actor}`,
+    `動作(action):     ${rec.action}`,
+    `指涉(ref):        ${rec.ref}`,
+    `資料雜湊(data):   ${rec.data_hash}`,
+    `前一手(prev_hash):${rec.prev_hash ?? '(null)'}`,
+    `本貼紙(record):   ${rec.record_hash}`,
+    '',
+    '說明：請搭配 verify.html 驗證鏈結是否完整（貼紙要一張牽一張）。'
+  ].join('\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([pretty], {type:'text/plain'}));
+  a.download = 'milestone_report.txt';
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+document.getElementById('btnReport').addEventListener('click', exportMilestoneReport);
+
+  document.getElementById('btnAttest').addEventListener('click', async ()=>{
+    // 1) 讀表單
+    const mid = document.getElementById('mid').value.trim();     if(!mid){ alert('請填里程碑編號'); return; }
+    const desc = document.getElementById('desc').value.trim();   if(!desc){ alert('請填敘述'); return; }
+    const status = document.getElementById('status').value;
+    const issuer = document.getElementById('issuer').value.trim() || 'admin@rwa';
+
+    // 2) 摘要雜湊（資料本體的 sha256）
+    const payload = { mid, desc, status, ts: nowISO() };
+    const h = await sha256Hex(JSON.stringify(payload));
+    document.getElementById('hashOut').textContent = h;
+
+    // 3) 取出目前 JSONL 最後一行，算 prev_hash
+    const lines = readAudit();
+    const prev = lines.length ? await sha256Hex(JSON.stringify(lines[lines.length-1])) : null;
+
+    // 4) 組一筆標準審計記錄
+    const rec = {
+      ts: nowISO(),
+      actor: issuer,
+      action: 'MILESTONE_ATTESTED',
+      ref: 'milestone:' + mid + ':' + status,
+      data_hash: h,
+      prev_hash: prev,
+      record_hash: null
+    };
+    rec.record_hash = await calcRecordHash(rec);   // 用固定欄位順序封印
+
+    // 5) 寫回（避免重覆）
+    pushUnique(lines, rec);
+    writeAudit(lines);
+
+    alert('已寫入里程碑審計紀錄');
+  });
+
+    document.getElementById('btnExport').addEventListener('click', exportAudit);
+  </script>
+  <div id="statusSummary"></div>
+  <script src="js/statusSummary.js"></script>
+  </div>
+</body>
+</html>

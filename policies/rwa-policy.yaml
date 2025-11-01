@@ -1,0 +1,30 @@
+version: 2025-10-31
+default_action: deny
+rules:
+  - id: require-self-proof
+    when: proof.source == "self.celo.sepolia" || proof.source == "self.celo.mainnet"
+    effect: allow
+    description: "必須使用 Self proof 來源"
+  
+  - id: require-country-allowed
+    when: proof.country in ["TW", "US", "EEA"]
+    effect: allow
+    description: "允許特定國家/地區"
+  
+  - id: block-sanctioned
+    when: proof.sanctioned == true
+    effect: deny
+    description: "封鎖受制裁地址"
+  
+  - id: require-age
+    when: proof.age_verified == true && proof.age >= 18
+    effect: allow
+    description: "必須年滿 18 歲"
+  
+  - id: require-document-hash
+    when: context == "rwa" && doc_hash != null
+    effect: allow
+    description: "RWA 場景需提供文件雜湊"
+
+
+

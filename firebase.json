@@ -1,0 +1,30 @@
+{
+  "functions": { "source": "functions" },
+  "hosting": {
+    "public": "public",
+    "ignore": [],
+    "rewrites": [
+      { "source": "/api/rpcHealth",  "function": "rpcHealthCheck" },
+      { "source": "/api/verifyProof","function": "verifyProof" },
+      { "source": "/api/self/health","function": "selfHealth" },
+      { "source": "/api/self/verify","function": "selfVerify" },
+      { "source": "/api/self/verify-by-tx","function": "verifyByTx" },
+      { "source": "/api/self/capsule/**","function": "generateCapsule" },
+      { "source": "/api/dao/verify","function": "daoVerify" },
+      { "source": "/api/dao/auth","function": "daoAuth" },
+      { "source": "/api/dao/proposal-verify","function": "daoProposalVerify" },
+      { "source": "/api/agent/verify","function": "agentVerify" },
+      { "source": "/api/social/verify","function": "socialVerify" },
+      { "source": "/api/doc/hash-verify","function": "docHashVerify" },
+      { "source": "/api/scenarios/**","function": "scenariosDemo" },
+      { "source": "/api/performance/stats","function": "performanceStats" },
+      { "source": "/api/audit","function": "auditLog" }
+    ]
+  },
+  "emulators": {
+    "ui":        { "enabled": true, "port": 4001 },
+    "functions": { "port": 5001 },
+    "hosting":   { "port": 5500 },
+    "firestore": { "port": 8080 }
+  }
+}

@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <title>成員 VC 產生器｜RWA Housing Governance MVP</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+
+    
+
+    body { font-family: system-ui,-apple-system,Segoe UI,Roboto,Noto Sans,Helvetica,Arial,"Apple Color Emoji","Segoe UI Emoji"; margin:24px; line-height:1.6; background:#f9fafb; }
+    .container { max-width:1200px; margin:0 auto; }
+    .card { border:1px solid #e5e7eb; border-radius:12px; padding:20px; margin:16px 0; background:white; box-shadow:0 1px 3px rgba(0,0,0,0.1); }
+    .card h3 { margin-top:0; color:#1f2937; }
+    label { display:block; margin:10px 0 4px; }
+    input, select, button, textarea { font-size:16px; }
+    input, select, textarea { width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius:8px; }
+    textarea { min-height: 140px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono","Courier New", monospace; }
+    .row { display:flex; gap:12px; }
+    .row > div { flex:1; }
+    .actions { display:flex; flex-wrap:wrap; gap:10px; margin-top:12px; }
+    .hint { color:#6b7280; font-size: 13px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div style="margin-bottom:24px;">
+      <h1 style="margin:0 0 8px 0; font-size:28px; color:#1f2937;">🏗️ Core Flow ｜ 成員 VC 產生器</h1>
+      <p class="hint" style="color:#6b7280; margin:0; font-size:14px;">房客 / 房東 / 公證 / 銀行身份驗證憑證</p>
+    </div>
+<div class="card" id="flow-wizard">
+    <label style="margin-top:0;">我要測試哪一條驗證流程？</label>
+    <div style="display:flex;gap:16px;flex-wrap:wrap;">
+      <label><input type="radio" name="flow" value="A" checked> A：成員 VC 發行（留在本頁）</label>
+      <label><input type="radio" name="flow" value="B"> B：日誌驗鏈（verify.html）</label>
+      <label><input type="radio" name="flow" value="C"> C：撥款前核驗（payout_verify.html）</label>
+    </div>
+    <div class="actions" style="margin-top:12px;">
+      <button id="btnStartFlow" type="button">開始</button>
+      <span id="flowHint" class="hint"></span>
+    </div>
+  </div>
+  <div class="card">
+    <div class="row">
+      <div>
+        <label>身分角色（role）</label>
+        <select id="role">
+          <option value="tenant">房客 tenant</option>
+          <option value="landlord">房東 landlord</option>
+          <option value="notary">公證人 notary</option>
+          <option value="bank">銀行 bank</option>
+        </select>
+      </div>
+      <div>
+        <label>主體名稱（subject）</label>
+        <input id="subject" placeholder="例如：張三 / 或機構名稱" />
+      </div>
+    </div>
+
+    <div class="row">
+      <div>
+        <label>簽發者（issuer）</label>
+        <input id="issuer" value="RWA-Housing-Governance-MVP" />
+        <div class="hint">可用組織名稱或你的識別（例如 admin@rwa）</div>
+      </div>
+      <div>
+        <label>到期（expires_at，可選）</label>
+        <input id="expires" type="date" />
+      </div>
+    </div>
+
+    <div class="actions">
+      <button id="btnMake">① 產生 VC 並下載</button>
+      <button id="btnExportLog" type="button">② 匯出審計日誌（audit_log.jsonl）</button>
+      <button id="btnReceipt" type="button">③ 匯出 VC 簽章回執</button>
+
+      <label class="hint">（可重複下載；日誌暫存在瀏覽器 localStorage）</label>
+    </div>
+  </div>
+
+  <div class="card">
+    <label>產生結果（VC JSON）</label>
+    <textarea id="vcOut" readonly></textarea>
+  </div>
+
+  </div>
+  <!-- 導覽列放這裡（依你的慣例） -->
+  <div id="statusSummary"></div>
+  <div id="nav"></div>
+  <script src="js/nav.js?v=20251031v4v3"></script>
+  <script src="js/statusSummary.js"></script>
+
+  <script>
+
+(function fixJsonlNewlines(){
+  const buf = localStorage.getItem('audit_log_jsonl') || '';
+  if (buf.includes('\\n{') || buf.includes('}\\n')) {
+    localStorage.setItem('audit_log_jsonl', buf.replace(/\\n/g, '\n'));
+  }
+})();
+
+  // ========= 0) 小幫手：時間 / 隨機 / 16進位 =========
+  const nowISO = () => new Date().toISOString();
+  const rnd = (len=8) => Array.from(crypto.getRandomValues(new Uint8Array(len)))
+                          .map(b=>b.toString(16).padStart(2,'0')).join('');
+
+  // ========= 1) 穩定序列化：key 排序，避免不同瀏覽器順序不一致 =========
+  function stableStringify(obj){
+    if (obj === null || typeof obj !== 'object') return JSON.stringify(obj);
+    if (Array.isArray(obj)) return '[' + obj.map(stableStringify).join(',') + ']';
+    const keys = Object.keys(obj).sort();
+    return '{' + keys.map(k => JSON.stringify(k) + ':' + stableStringify(obj[k])).join(',') + '}';
+  }
+
+  // ========= 2) SHA-256（Web Crypto），輸出十六進位 =========
+  async function sha256Hex(str){
+    const data = new TextEncoder().encode(str);
+    const dig = await crypto.subtle.digest('SHA-256', data);
+    return Array.from(new Uint8Array(dig)).map(b => b.toString(16).padStart(2,'0')).join('');
+  }
+
+  // ========= 3) 讀寫審計日誌（存 localStorage，之後可匯出為 .jsonl）=========
+  const LOG_KEY = 'audit_log_jsonl';
+
+  function appendAudit(lineObj){
+    let buf = localStorage.getItem(LOG_KEY) || '';
+    const line = JSON.stringify(lineObj);
+
+    buf += (buf && !buf.endsWith('\n') ? '\n' : '') + line + '\n';
+    localStorage.setItem(LOG_KEY, buf);
+  }
+
+  function exportAudit(){
+    const buf = localStorage.getItem(LOG_KEY) || '';
+    const blob = new Blob([buf], {type:'application/jsonl;charset=utf-8'});
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'audit_log.jsonl';
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
+  function readAuditLines(){
+  const buf = localStorage.getItem(LOG_KEY) || '';
+  if (!buf) return [];
+  const rows = buf.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+  try {
+    return rows.map(s => JSON.parse(s));
+  } catch (e) {
+    // 進階保險：若中途有壞行，先標記並略過，避免整個功能掛掉
+    const good = [];
+    for (const s of rows) {
+      try { good.push(JSON.parse(s)); } catch(_) { /* 忽略壞行 */ }
+    }
+    return good;
+  }
+}
+// 以固定欄位順序做 record_hash，避免不同瀏覽器鍵順序差異
+async function calcRecordHash(o){
+  const plain = JSON.stringify({
+    ts:o.ts, actor:o.actor, action:o.action, ref:o.ref, data_hash:o.data_hash, prev_hash:o.prev_hash
+  });
+  return await sha256Hex(plain);
+}
+
+  // ========= 4) 產生 VC + 下載 + 寫一行日誌 =========
+  document.getElementById('btnMake').addEventListener('click', async () => {
+    const role = document.getElementById('role').value.trim();
+    const subject = document.getElementById('subject').value.trim();
+    const issuer = document.getElementById('issuer').value.trim();
+    const expires = document.getElementById('expires').value ? 
+                    (new Date(document.getElementById('expires').value).toISOString()) : null;
+            if (!role) { alert('請選擇身分角色'); return; }
+if(!subject){ alert('請輸入主體名稱（subject）'); return; }
+  
+    const payload = {
+      subject, role, issuer,
+      issued_at: nowISO(),
+      expires_at: expires
+    };
+    const payloadStr = stableStringify(payload);
+    const payload_hash = await sha256Hex(payloadStr);
+    const vc = {
+      type: 'MEMBER-VC',
+      v: 1,
+      payload,
+      payload_hash,
+      nonce: rnd(12)
+    };
+
+    // 顯示在畫面
+    const vcTxt = JSON.stringify(vc, null, 2);
+    document.getElementById('vcOut').value = vcTxt;
+
+    // 下載 VC JSON
+    const blob = new Blob([vcTxt], {type:'application/json;charset=utf-8'});
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'member_vc_' + role + '_' + Date.now() + '.json'
+
+    a.click();
+    URL.revokeObjectURL(a.href);
+
+   // === 寫一行審計日誌（JSONL） ===
+const lines = readAuditLines();
+const prev = lines.length ? await sha256Hex(JSON.stringify(lines[lines.length - 1])) : null;
+
+const rec = {
+  ts: nowISO(),
+  actor: issuer || 'admin@rwa',
+  action: 'VC_ISSUED',
+  ref: 'member:' + subject,
+  data_hash: await sha256Hex(vcTxt),
+  prev_hash: prev,
+  record_hash: null
+};
+rec.record_hash = await calcRecordHash(rec);
+
+const sig = `${rec.action}|${rec.ref}|${rec.data_hash}`;
+const seen = new Set(lines.map(x => `${x.action}|${x.ref}|${x.data_hash}`));
+if (!seen.has(sig)) {
+appendAudit(rec);
+}
+alert('已產生並下載 VC；同步寫入一行鏈式審計日誌（可用「匯出」下載 audit_log.jsonl）');
+});
+  // ========= 5) 匯出日誌 =========
+  document.getElementById('btnExportLog').addEventListener('click', exportAudit);
+
+function exportMemberReceipt(){
+  const lines = readAuditLines();
+  if (!lines.length){ alert('目前還沒有任何審計記錄'); return; }
+  // 只針對最新一筆與成員有關的紀錄（VC_ISSUED 優先）
+  let rec = [...lines].reverse().find(x => x.action === 'VC_ISSUED') || lines[lines.length-1];
+
+
+  const body = [
+    '【成員 VC 簽章回執】',
+    `時間(ts):         ${rec.ts}`,
+    `簽發者(actor):    ${rec.actor}`,
+    `動作(action):     ${rec.action}`,
+    `指涉(ref):        ${rec.ref}`,
+    `資料雜湊(data):   ${rec.data_hash}`,
+    `前一手(prev_hash):${rec.prev_hash ?? '(null)'}`,
+    `本貼紙(record):   ${rec.record_hash}`,
+    '',
+    '說明：請搭配 verify.html 驗鏈（每一張貼紙要牽住上一張）。'
+  ].join('\n');
+
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([body], {type:'text/plain'}));
+  const ts = new Date().toISOString().replace(/[-:.TZ]/g,'').slice(0,14);
+const subj = String(rec.ref || '').replace(/^member:/,'').replace(/\W+/g,'-') || 'member';
+a.download = `vc_receipt_${subj}_${ts}.txt`;
+
+
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+document.getElementById('btnReceipt').addEventListener('click', exportMemberReceipt);
+ (function initWizard(){
+      const start = document.getElementById('btnStartFlow');
+      const hint = document.getElementById('flowHint');
+      if (!start) return;
+
+      start.addEventListener('click', () => {
+        const v = (document.querySelector('input[name="flow"]:checked') || {}).value;
+        if (v === 'A') {
+          // 留在本頁：提示接下來要做什麼
+          hint.textContent = '請先選角色與主體，按「① 產生 VC」，之後可到 verify.html 做驗鏈。';
+          hint.style.color = '#15803d';
+        } else if (v === 'B') {
+          // 導向 verify：帶上小小提示旗標
+          location.href = 'verify.html?guide=from_members';
+        } else if (v === 'C') {
+          // 導向 payout_verify：帶上小小提示旗標
+          location.href = 'payout_verify.html?guide=from_members';
+        }
+      });
+    })();
+  </script>
+</body>
+</html>

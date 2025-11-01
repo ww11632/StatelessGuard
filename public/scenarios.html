@@ -1,0 +1,2122 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <title>多場景 Demo｜StatelessGuard</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    body { font-family: system-ui,-apple-system,Segoe UI,Roboto,Noto Sans,Helvetica,Arial; margin:24px; line-height:1.6; background:#f9fafb; }
+    .container { max-width:1200px; margin:0 auto; }
+    .card { border:1px solid #e5e7eb; border-radius:12px; padding:20px; margin:16px 0; background:white; box-shadow:0 1px 3px rgba(0,0,0,0.1); }
+    .card h3 { margin-top:0; color:#1f2937; }
+    .scenario-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(280px, 1fr)); gap:16px; margin:20px 0; }
+    .scenario-card { border:1px solid #e8eaed; border-radius:12px; padding:16px; background:white; cursor:pointer; transition:all 0.2s; position:relative; }
+    .scenario-card:hover { border-color:#3b82f6; box-shadow:0 4px 6px rgba(0,0,0,0.1); }
+    .scenario-card.active { border-color:#3b82f6; background:#eff6ff; }
+    .scenario-icon { font-size:32px; margin-bottom:14px; }
+    .scenario-card .click-hint { opacity:0; transition:opacity 0.2s; font-size:12px; color:#9ca3af; margin-top:8px; }
+    .scenario-card:hover .click-hint { opacity:1; }
+    .scenario-steps { margin-top:12px; padding-left:20px; }
+    .scenario-steps li { margin:4px 0; font-size:14px; color:#6b7280; }
+    .demo-section { margin-top:20px; padding:16px; background:#f3f4f6; border-radius:8px; }
+    .btn { padding:8px 16px; background:#3b82f6; color:white; border:none; border-radius:6px; cursor:pointer; margin:4px; }
+    .btn:hover { background:#2563eb; }
+    .btn.secondary { background:#6b7280; }
+    .btn.secondary:hover { background:#4b5563; }
+    .perf-stats { margin-top:16px; padding:12px; background:#f0fdf4; border-radius:8px; font-size:13px; }
+    .perf-stats strong { color:#10b981; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:24px;">
+      <div>
+        <h1 style="margin:0 0 8px 0; font-size:28px; color:#1f2937;">🎯 Scenarios ｜ Multi-Domain Verification</h1>
+        <p class="hint" style="color:#6b7280; margin:0; font-size:14px;">RWA / DAO / Social / AI Agent 生態驗證場景</p>
+      </div>
+      <div id="statusIndicator" style="text-align:right; font-size:11px; color:#888; padding:12px 16px; background:#f9fafb; border-radius:8px; border:1px solid #e5e7eb; min-width:280px;">
+        <div id="chainStatus" style="margin-bottom:6px;">
+          <strong style="color:#1f2937;">Connected Chain:</strong> Celo-Sepolia <span style="color:#10b981;">✅</span>
+        </div>
+        <div id="chainDetails" style="font-size:10px; margin-bottom:6px; color:#6b7280; font-family:ui-monospace;">
+          Block Height: <span id="blockHeight">8,594,544</span> | Latency: <span id="latency">1.2s</span>
+        </div>
+        <div id="capsuleStatus" style="font-family:ui-monospace; font-size:10px; border-top:1px solid #e5e7eb; padding-top:6px;">
+          Last Verified: <span id="lastVerifiedTime">—</span><br>
+          <span id="lastCapsule" style="color:#2563eb;">—</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="scenario-grid" id="scenarioGrid">
+        <!-- 預先寫入場景卡片（確保即使 JavaScript 有問題也能顯示） -->
+        <div class="scenario-card" data-key="rwa" style="cursor:pointer;">
+          <div class="scenario-icon">🏠</div>
+          <h4>RWA 合規入口</h4>
+          <p class="click-hint">點擊查看詳情</p>
+        </div>
+        <div class="scenario-card" data-key="dao" style="cursor:pointer;">
+          <div class="scenario-icon">🏛️</div>
+          <h4>DAO 治理</h4>
+          <p class="click-hint">點擊查看詳情</p>
+        </div>
+        <div class="scenario-card" data-key="social" style="cursor:pointer;">
+          <div class="scenario-icon">👥</div>
+          <h4>Social Network</h4>
+          <p class="click-hint">點擊查看詳情</p>
+        </div>
+        <div class="scenario-card" data-key="agent" style="cursor:pointer;">
+          <div class="scenario-icon">🤖</div>
+          <h4>AI Agent Ecosystem</h4>
+          <p class="click-hint">點擊查看詳情</p>
+        </div>
+      </div>
+    </div>
+
+    <div id="selectedScenario" class="card" style="display:none;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+        <div>
+          <h3 id="scenarioTitle" style="margin:0;"></h3>
+          <p id="scenarioDesc" style="margin-top:8px;color:#6b7280;"></p>
+        </div>
+        <button class="btn secondary" onclick="document.getElementById('selectedScenario').style.display='none'">✕ 關閉</button>
+      </div>
+      
+      <div id="scenarioSteps" style="margin-bottom:20px;"></div>
+      
+      <div class="demo-section">
+        <h4>快速測試</h4>
+        <div style="margin-bottom:12px;">
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+            <input type="checkbox" id="agentModeToggle" style="cursor:pointer;" />
+            <span>🧠 Proof-of-Agent DAO voter（此投票由 AI Agent 代表人類執行）</span>
+          </label>
+        </div>
+        <div style="margin-bottom:12px;">
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+            <span style="font-weight:600;color:#1f2937;">⚖️ Policy:</span>
+            <select id="policySelect" style="padding:4px 8px;border:1px solid #e5e7eb;border-radius:4px;font-size:13px;">
+              <option value="agent-policy">AgentTrustPolicyV1</option>
+              <option value="rwa-policy">RWACompliancePolicyV1</option>
+              <option value="dao-policy">DAOGovernancePolicyV1</option>
+            </select>
+          </label>
+        </div>
+        <div style="margin-bottom:12px;">
+          <button class="btn" onclick="window.testScenario && window.testScenario()">🚀 測試此場景</button>
+          <button class="btn secondary" id="btnTestRejected" style="display:none;" onclick="window.testRejected && window.testRejected()">❌ 測試拒絕案例</button>
+          <button class="btn secondary" id="btnTestDenylist" style="display:none;" onclick="window.testDenylist && window.testDenylist()">🚫 測試 Denylist 場景</button>
+        </div>
+        <button class="btn secondary" onclick="window.viewPerformance && window.viewPerformance()">📊 查看性能統計</button>
+        <button class="btn secondary" id="btnViewTrace" style="display:none;" onclick="window.viewCapsuleTrace && window.viewCapsuleTrace()">🔍 檢視 Capsule Trace</button>
+        <button class="btn secondary" id="btnReplayAudit" onclick="window.replayAuditLog && window.replayAuditLog()">🔄 重播驗證流程</button>
+        <button class="btn secondary" onclick="window.open('/self-onchain.html', '_blank')">🔗 前往驗證頁面</button>
+      </div>
+      
+      <div id="testResult" style="margin-top:16px;"></div>
+    </div>
+
+    <div id="perfStats" class="card" style="display:none;">
+      <h3>📊 性能統計</h3>
+      <div id="perfContent" class="perf-stats">
+        <p>載入中...</p>
+      </div>
+    </div>
+
+    <div id="statusSummary"></div>
+    <div id="nav"></div>
+  </div>
+
+  <script src="js/nav.js?v=20251031v4v3"></script>
+  <script src="js/statusSummary.js"></script>
+  <script src="js/config.js"></script>
+  <script>
+    (function(){
+      const SCENARIOS = {
+        rwa: { icon: '🏠', name: 'RWA 合規入口', color: '#10b981' },
+        dao: { icon: '🏛️', name: 'DAO 治理', color: '#3b82f6' },
+        social: { icon: '👥', name: 'Social Network', color: '#8b5cf6' },
+        agent: { icon: '🤖', name: 'AI Agent Ecosystem', color: '#f59e0b' },
+      };
+      
+      let selectedScenario = null;
+      
+      // 確保 loadScenarios 函數在 DOM 準備好後執行
+      function init() {
+        console.log('初始化函數被調用，DOM readyState:', document.readyState);
+        if (document.readyState === 'loading') {
+          console.log('等待 DOMContentLoaded 事件...');
+          document.addEventListener('DOMContentLoaded', function() {
+            console.log('DOMContentLoaded 事件觸發');
+            loadScenarios();
+          });
+        } else {
+          console.log('DOM 已準備好，立即執行 loadScenarios');
+          // 使用 setTimeout 確保 DOM 完全準備好
+          setTimeout(loadScenarios, 100);
+        }
+      }
+
+      // 載入場景列表（現在場景卡片已經預先寫在 HTML 中）
+      function loadScenarios() {
+        console.log('開始初始化場景列表...');
+        
+        const grid = document.getElementById('scenarioGrid');
+        if (!grid) {
+          console.error('找不到 scenarioGrid 元素');
+          alert('錯誤：找不到場景網格元素！');
+          return;
+        }
+        
+        // 確保所有預先寫入的卡片都有正確的點擊事件
+        const cards = grid.querySelectorAll('.scenario-card');
+        console.log(`找到 ${cards.length} 個場景卡片`);
+        
+        if (cards.length === 0) {
+          console.error('沒有找到任何場景卡片！');
+          alert('錯誤：沒有找到任何場景卡片！');
+          return;
+        }
+        
+        cards.forEach((card, index) => {
+          const key = card.getAttribute('data-key');
+          if (!key) {
+            console.warn(`卡片 ${index} 沒有 data-key 屬性`);
+            return;
+          }
+          
+          console.log(`綁定場景卡片：${key}`);
+          
+          // 直接綁定點擊事件（不使用 cloneNode，直接綁定）
+          card.style.cursor = 'pointer';
+          card.addEventListener('click', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            console.log(`✓ 點擊場景卡片：${key}`, e);
+            try {
+              selectScenario(key, e);
+            } catch(err) {
+              console.error('selectScenario 錯誤：', err);
+              alert('選擇場景時發生錯誤：' + err.message);
+            }
+          }, false);
+          
+          console.log(`✓ 已綁定場景卡片：${key}`);
+        });
+        
+        // 如果 URL 中有場景參數，自動選擇
+        const urlParams = new URLSearchParams(window.location.search);
+        const autoScenario = urlParams.get('scenario');
+        if (autoScenario && SCENARIOS[autoScenario]) {
+          setTimeout(() => {
+            try {
+              selectScenario(autoScenario, null);
+            } catch(err) {
+              console.error('自動選擇場景錯誤：', err);
+            }
+          }, 100);
+        }
+        
+        console.log('✓ 場景列表初始化完成');
+      }
+
+      // 選擇場景
+      async function selectScenario(key, event) {
+        console.log(`=== 選擇場景開始：${key} ===`, event);
+        
+        if (!key) {
+          console.error('選擇場景失敗：key 為空');
+          alert('錯誤：場景 key 為空');
+          return;
+        }
+        
+        if (!SCENARIOS[key]) {
+          console.error(`選擇場景失敗：場景 ${key} 不存在`);
+          alert(`錯誤：場景 ${key} 不存在`);
+          return;
+        }
+        
+        selectedScenario = key;
+        console.log('selectedScenario 已設置為：', selectedScenario);
+        
+        // 移除所有 active 狀態
+        document.querySelectorAll('.scenario-card').forEach(c => c.classList.remove('active'));
+        
+        // 設定當前卡片為 active
+        let targetCard = null;
+        if (event && event.currentTarget) {
+          targetCard = event.currentTarget;
+          console.log('使用 event.currentTarget：', targetCard);
+        } else if (event && event.target) {
+          targetCard = event.target.closest('.scenario-card');
+          console.log('使用 event.target.closest：', targetCard);
+        }
+        
+        if (targetCard) {
+          targetCard.classList.add('active');
+          console.log('✓ 已設定卡片為 active（從 event）：', targetCard);
+        } else {
+          // 如果無法從 event 取得，直接找到對應的卡片
+          const cards = document.querySelectorAll('.scenario-card');
+          console.log(`找不到 event 中的卡片，搜索 ${cards.length} 個卡片...`);
+          cards.forEach(card => {
+            if (card.getAttribute('data-key') === key) {
+              card.classList.add('active');
+              console.log('✓ 已找到並設定卡片為 active：', card);
+            }
+          });
+        }
+        
+        // 立即顯示場景卡片（不等待 API）
+        const scenario = SCENARIOS[key];
+        const titleEl = document.getElementById('scenarioTitle');
+        const descEl = document.getElementById('scenarioDesc');
+        const stepsEl = document.getElementById('scenarioSteps');
+        
+        if (!titleEl || !descEl || !stepsEl) {
+          console.error('找不到必要的 DOM 元素', { titleEl, descEl, stepsEl });
+          alert('錯誤：找不到場景詳情顯示區域！');
+          return;
+        }
+        
+        titleEl.textContent = `${scenario.icon} ${scenario.name}`;
+        descEl.textContent = '點擊測試按鈕可直接測試此場景';
+        
+        // 使用預設的步驟（不等待 API）
+        const defaultSteps = {
+          rwa: ['Self Proof 驗證（身份/國籍/年齡/OFAC）', '文件雜湊驗證（租約/抵押協議）', '撥款前核驗', 'JSONL 審計日誌'],
+          dao: ['身份驗證（Proof-of-Human / Proof-of-Agent）', '一鍵驗證與授權', '投票權限授予', '提案發起權限'],
+          social: ['身份驗證（國籍/年齡）', '社群准入檢查', '內容發布權限', '信任評分'],
+          agent: ['Proof-of-Agent 驗證', 'Sandbox 分數檢查', 'Agent 信任鏈驗證', 'AI Agent 白名單'],
+        };
+        const defaultEndpoints = {
+          rwa: ['/api/self/verify-by-tx', '/api/self/verify'],
+          dao: ['/api/dao/verify', '/api/dao/auth'],
+          social: ['/api/self/verify', '/api/social/verify'],
+          agent: ['/api/agent/verify'],
+        };
+        
+        const steps = defaultSteps[key] || [];
+        const endpoints = defaultEndpoints[key] || [];
+        
+        console.log('設置場景步驟和端點', { steps, endpoints });
+        
+        stepsEl.innerHTML = '<h4>流程步驟：</h4><ol class="scenario-steps">' +
+          steps.map(s => `<li>${s}</li>`).join('') + '</ol>';
+        
+        if (endpoints.length > 0) {
+          stepsEl.innerHTML += '<h4 style="margin-top:16px;">相關 API 端點：</h4><ul class="scenario-steps">' +
+            endpoints.map(e => `<li><code style="font-size:12px;background:#f3f4f6;padding:2px 6px;border-radius:4px;">${e}</code></li>`).join('') + '</ul>';
+        }
+        
+        const selectedDiv = document.getElementById('selectedScenario');
+        const testResultDiv = document.getElementById('testResult');
+        
+        if (!selectedDiv) {
+          console.error('找不到 selectedScenario 元素');
+          alert('錯誤：找不到場景詳情顯示區域！');
+          return;
+        }
+        
+        selectedDiv.style.display = 'block';
+        console.log('✓ 已顯示場景詳情區域');
+        
+        if (testResultDiv) {
+          testResultDiv.innerHTML = ''; // 清空測試結果
+        }
+        
+        // 嘗試從 API 載入額外資訊（非阻塞）
+        try {
+          const apiBase = window.API_BASE_URL || '';
+          const resp = await fetch(`${apiBase}/api/scenarios/${key}`);
+          if (resp.ok) {
+            const contentType = resp.headers.get('content-type');
+            if (contentType && contentType.includes('application/json')) {
+            const data = await resp.json();
+            if (data.name) document.getElementById('scenarioTitle').textContent = `${scenario.icon} ${data.name}`;
+            if (data.description) document.getElementById('scenarioDesc').textContent = data.description;
+            if (data.steps && Array.isArray(data.steps) && data.steps.length > 0) {
+              stepsDiv.innerHTML = '<h4>流程步驟：</h4><ol class="scenario-steps">' +
+                data.steps.map(s => `<li>${s}</li>`).join('') + '</ol>';
+              if (data.endpoints && Array.isArray(data.endpoints)) {
+                stepsDiv.innerHTML += '<h4 style="margin-top:16px;">相關 API 端點：</h4><ul class="scenario-steps">' +
+                  data.endpoints.map(e => `<li><code style="font-size:12px;background:#f3f4f6;padding:2px 6px;border-radius:4px;">${e}</code></li>`).join('') + '</ul>';
+              }
+            }
+          }
+          }
+        } catch(e) {
+          console.log('API 載入失敗（使用預設資料）', e);
+        }
+      }
+      
+      // 審計日誌查看功能（包含 AI Agent Trace Capsule）
+      window.viewAuditLog = function() {
+        const auditLog = window.__lastAuditLog;
+        if (!auditLog) {
+          alert('沒有可用的審計日誌資料');
+          return;
+        }
+        
+        // JSONL 格式的審計條目
+        const jsonlEntry = JSON.stringify(auditLog);
+        
+        // AI Agent Trace Capsule（可視化審計鏈）
+        let traceCapsuleHtml = '';
+        if (auditLog.trace_capsule && Array.isArray(auditLog.trace_capsule)) {
+          traceCapsuleHtml = `<div style="margin-top:16px;padding:12px;background:#f0f9ff;border-left:4px solid #3b82f6;border-radius:6px;">`;
+          traceCapsuleHtml += `<strong style="color:#1e40af;font-size:14px;">🧩 AI Agent Trace Capsule</strong><br>`;
+          traceCapsuleHtml += `<div style="margin-top:8px;font-family:monospace;font-size:12px;line-height:1.8;">`;
+          auditLog.trace_capsule.forEach((entry, index) => {
+            const ts = new Date(entry.timestamp).toLocaleString('zh-TW', { 
+              year: 'numeric', month: '2-digit', day: '2-digit',
+              hour: '2-digit', minute: '2-digit', second: '2-digit'
+            });
+            traceCapsuleHtml += `${ts} | ${entry.action} | ${entry.details}<br>`;
+          });
+          traceCapsuleHtml += `</div>`;
+          traceCapsuleHtml += `</div>`;
+        }
+        
+        const auditLines = [
+          `JSONL Audit Log Entry:`,
+          ``,
+          jsonlEntry,
+          ``,
+          `格式說明：`,
+          `- timestamp: 審計時間`,
+          `- action: 操作類型（AGENT_VERIFICATION）`,
+          `- status: 狀態（FAIL）`,
+          `- reason: 失敗原因（AGENT_NOT_IN_WHITELIST）`,
+          `- proof_ref: Proof 引用（與追溯鏈一致）`,
+          `- capsuleHash: Capsule 雜湊（與 RWA/DAO 格式一致）`,
+          `- sandbox_score: 沙盒評估分數`,
+          `- threshold: 安全閾值`,
+          `- delegate_scope_denied: 被拒絕的代理範疇`,
+          `- trust_policy_version: 信任政策版本`,
+          `- verifier: 驗證者（StatelessGuard）`,
+        ];
+        
+        // 顯示彈窗
+        const auditDiv = document.createElement('div');
+        const auditModalId = 'auditEntryModal';
+        auditDiv.id = auditModalId;
+        auditDiv.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:white;padding:24px;border-radius:12px;box-shadow:0 8px 16px rgba(0,0,0,0.2);max-width:800px;max-height:80vh;overflow:auto;z-index:1000;font-family:monospace;';
+        auditDiv.innerHTML = `
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+            <h3 style="margin:0;color:#1f2937;">🗒️ 審計日誌 Entry</h3>
+            <button onclick="document.getElementById('${auditModalId}')?.remove()" style="background:#ef4444;color:white;border:none;padding:8px 16px;border-radius:6px;cursor:pointer;">✕ 關閉</button>
+          </div>
+          ${traceCapsuleHtml}
+          <div style="background:#f9fafb;padding:16px;border-radius:8px;font-size:13px;line-height:1.8;margin-top:16px;">
+            <pre style="margin:0;white-space:pre-wrap;word-wrap:break-word;">${auditLines.join('\n')}</pre>
+          </div>
+          <div style="margin-top:16px;padding-top:16px;border-top:1px solid #e5e7eb;">
+            <strong style="color:#6b7280;font-size:12px;">JSONL 格式</strong>
+            ${auditLog.jsonl_hash ? `
+            <div style="margin-top:8px;padding:8px;background:#f0f9ff;border-left:3px solid #3b82f6;border-radius:4px;font-size:12px;">
+              <strong style="color:#1e40af;">🧾 JSONL Hash:</strong> <code style="font-size:11px;color:#6366f1;">${auditLog.jsonl_hash.slice(0, 8)}...${auditLog.jsonl_hash.slice(-8)}</code><br>
+              <span style="color:#6b7280;font-size:11px;font-style:italic;">（每次驗證皆寫入鏈上審計紀錄）</span>
+            </div>
+            ` : ''}
+            <p style="color:#6b7280;font-size:12px;margin-top:8px;">此審計條目符合 JSONL 格式，可追加到審計日誌文件中。每個驗證操作都會生成類似的審計條目，形成完整的審計鏈。Trace Capsule 展示了從驗證到授權決策的完整審計路徑。每一次驗證與拒絕都能被鏈上追溯。</p>
+            <button onclick="navigator.clipboard.writeText('${jsonlEntry.replace(/'/g, "\\'")}').then(() => alert('已複製到剪貼板'))" style="margin-top:8px;background:#6366f1;color:white;border:none;padding:6px 12px;border-radius:4px;cursor:pointer;font-size:12px;">📋 複製 JSONL</button>
+          </div>
+        `;
+        document.body.appendChild(auditDiv);
+      };
+      
+      // Capsule Trace 查看功能
+      window.viewCapsuleTrace = function() {
+        const data = window.__lastTestResult;
+        if (!data || (!data.proof_ref && !data.capsuleHash && !data.trace)) {
+          alert('沒有可用的 Capsule Trace 資料');
+          return;
+        }
+        
+        const now = new Date();
+        const traceLines = [];
+        
+        // 構建 JSONL 格式的審計鏈
+        if (data.trace) {
+          traceLines.push(`✅ ${data.trace.proof_verified_at || now.toISOString()} → Proof 驗證`);
+          traceLines.push(`✅ ${data.trace.dao_auth_granted_at || now.toISOString()} → DAO Auth Granted`);
+          if (data.actions && Array.isArray(data.actions)) {
+            traceLines.push(`✅ ${now.toISOString()} → ${data.actions.map(a => {
+              const labels = {
+                'vote': '投票權限啟用',
+                'propose': '提案權限啟用',
+                'sign': '簽署權限啟用',
+                'whitelist': '白名單啟用',
+                'access': '訪問權限啟用',
+              };
+              return labels[a] || a;
+            }).join(' / ')}`);
+          }
+        } else {
+          traceLines.push(`✅ ${data.timestamp || now.toISOString()} → Proof 驗證`);
+          traceLines.push(`✅ ${data.timestamp || now.toISOString()} → DAO Auth Granted`);
+        }
+        
+        traceLines.push('');
+        traceLines.push('Chain of Trust:');
+        traceLines.push(`- Proof Reference: ${data.proof_ref || 'N/A'}`);
+        traceLines.push(`- Capsule Hash: ${data.capsuleHash || 'N/A'}`);
+        if (data.verification?.agent_signature) {
+          traceLines.push(`- Agent Signature: ${data.verification.agent_signature.slice(0, 20)}...${data.verification.agent_signature.slice(-10)}`);
+        }
+        traceLines.push(`- Verifier: StatelessGuard`);
+        
+        // 增強版：從 audit_log.jsonl 生成視覺化信任鏈
+        function loadAuditLog() {
+          const raw = localStorage.getItem('audit_log_jsonl') || '';
+          if (!raw.trim()) return [];
+          try {
+            return raw.split(/\r?\n/).filter(Boolean).map(line => {
+              try { return JSON.parse(line); } catch { return null; }
+            }).filter(Boolean);
+          } catch {
+            return [];
+          }
+        }
+
+        const logs = loadAuditLog();
+        const recentLogs = logs.slice(-5).reverse();
+        const capsules = [];
+        
+        recentLogs.forEach((entry, index) => {
+          const capsuleType = 
+            entry.action?.includes('VERIFY') || entry.action?.includes('PROOF') ? 'Proof Capsule' :
+            entry.action?.includes('VC') || entry.action?.includes('CREDENTIAL') ? 'VC Capsule' :
+            entry.action?.includes('AUDIT') || entry.action?.includes('LOG') ? 'Audit Capsule' :
+            entry.action?.includes('ONCHAIN') || entry.data_hash ? 'Onchain Capsule' :
+            'Verification Capsule';
+          
+          capsules.push({
+            step: recentLogs.length - index,
+            capsule_id: `C-${String(recentLogs.length - index).padStart(3, '0')}`,
+            prev_hash: entry.prev_hash || entry.prevHash || (index > 0 ? capsules[index - 1].capsule_hash : null),
+            capsule_hash: entry.record_hash || entry.data_hash || entry.capsuleHash || 'N/A',
+            module: capsuleType,
+            action: entry.action || 'VERIFICATION',
+            actor: entry.actor || 'StatelessGuard',
+            timestamp: entry.ts || entry.timestamp || new Date().toISOString(),
+            verified: true,
+            raw_data: entry
+          });
+        });
+
+        if (data && (data.capsuleHash || data.capsule_hash)) {
+          const existingHash = data.capsuleHash || data.capsule_hash;
+          const exists = capsules.some(c => c.capsule_hash === existingHash);
+          if (!exists && capsules.length < 5) {
+            capsules.unshift({
+              step: capsules.length + 1,
+              capsule_id: `C-${String(capsules.length + 1).padStart(3, '0')}`,
+              prev_hash: capsules.length > 0 ? capsules[0].capsule_hash : null,
+              capsule_hash: existingHash,
+              module: data.context === 'agent-verification' ? 'Proof-of-Agent Capsule' : 'Verification Capsule',
+              action: 'AGENT_VERIFICATION',
+              actor: data.verifier || 'StatelessGuard',
+              timestamp: data.timestamp || new Date().toISOString(),
+              verified: data.status === 'verified',
+              raw_data: data
+            });
+          }
+        }
+
+        // 生成視覺化 HTML
+        let traceHtml = '<div style="margin-top:16px;">';
+        traceHtml += '<div style="display:flex;flex-direction:column;gap:16px;position:relative;padding-left:24px;">';
+        
+        capsules.forEach((capsule, index) => {
+          const isLast = index === capsules.length - 1;
+          const ts = new Date(capsule.timestamp).toLocaleString('zh-TW', {
+            month: '2-digit', day: '2-digit',
+            hour: '2-digit', minute: '2-digit', second: '2-digit'
+          });
+          
+          const shortHash = capsule.capsule_hash.length > 20 
+            ? capsule.capsule_hash.slice(0, 10) + '...' + capsule.capsule_hash.slice(-8)
+            : capsule.capsule_hash;
+          
+          traceHtml += `
+            <div class="capsule-node" data-capsule-id="${capsule.capsule_id}" style="position:relative;">
+              <div style="position:absolute;left:-24px;top:8px;width:2px;height:${isLast ? '8px' : 'calc(100% + 16px)'};background:#3b82f6;opacity:0.3;"></div>
+              <div style="position:absolute;left:-28px;top:4px;width:12px;height:12px;border-radius:50%;background:#10b981;border:2px solid white;box-shadow:0 0 0 2px #10b981;"></div>
+              <div style="background:white;border:2px solid #10b981;border-radius:8px;padding:12px;cursor:pointer;transition:all 0.2s;" 
+                   onclick="window.showCapsuleDetail && window.showCapsuleDetail(${index})"
+                   onmouseover="this.style.boxShadow='0 4px 12px rgba(16,185,129,0.2)';this.style.transform='translateX(4px)'"
+                   onmouseout="this.style.boxShadow='none';this.style.transform='translateX(0)'">
+                <div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:8px;">
+                  <div>
+                    <div style="font-weight:600;color:#1f2937;font-size:14px;">${capsule.module}</div>
+                    <div style="font-size:11px;color:#6b7280;margin-top:2px;">${capsule.action}</div>
+                  </div>
+                  <div style="background:#dcfce7;color:#166534;padding:4px 8px;border-radius:12px;font-size:11px;font-weight:600;">✅</div>
+                </div>
+                <div style="font-family:ui-monospace;font-size:11px;color:#2563eb;margin-top:8px;padding:6px;background:#f0f9ff;border-radius:4px;">
+                  ${capsule.capsule_id}: ${shortHash}
+                </div>
+                <div style="font-size:11px;color:#9ca3af;margin-top:6px;">${ts} · ${capsule.actor}</div>
+                ${capsule.prev_hash ? `<div style="font-size:10px;color:#9ca3af;margin-top:4px;font-style:italic;">prev: ${capsule.prev_hash.slice(0, 8)}...</div>` : ''}
+              </div>
+            </div>
+          `;
+        });
+        
+        traceHtml += '</div></div>';
+        
+        window.__capsules = capsules;
+        
+        // 顯示 Modal（如果有 capsules 則顯示視覺化版本，否則顯示文本版本）
+        const traceDiv = document.createElement('div');
+        traceDiv.id = 'capsuleTraceModal';
+        traceDiv.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:white;padding:24px;border-radius:12px;box-shadow:0 8px 16px rgba(0,0,0,0.2);max-width:800px;max-height:80vh;overflow:auto;z-index:1000;';
+        
+        if (capsules.length > 0) {
+          traceDiv.innerHTML = `
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;border-bottom:2px solid #e5e7eb;padding-bottom:12px;">
+              <div>
+                <h3 style="margin:0;color:#1f2937;font-size:18px;">🧩 Capsule Trace / Trust Path Layer</h3>
+                <p style="margin:4px 0 0 0;color:#6b7280;font-size:12px;">信任驗證鏈條的可追蹤封裝單位</p>
+              </div>
+              <button onclick="document.getElementById('capsuleTraceModal')?.remove()" style="background:#ef4444;color:white;border:none;padding:8px 16px;border-radius:6px;cursor:pointer;font-size:14px;">✕ 關閉</button>
+            </div>
+            ${traceHtml}
+            <div style="margin-top:20px;padding-top:16px;border-top:1px solid #e5e7eb;">
+              <p style="color:#6b7280;font-size:12px;line-height:1.6;">
+                <strong>信任路徑層說明：</strong><br>
+                Capsule Trace 是 StatelessGuard 的信任路徑層（Trust Path Layer）。它把 Proof、VC、Log、Onchain 驗證封裝成可追蹤的 capsule，形成一條可驗可審的跨域信任鏈。
+                <span style="color:#2563eb;">點擊上方節點可查看完整的 JSON 數據。</span>
+              </p>
+            </div>
+          `;
+        } else {
+          traceDiv.innerHTML = `
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+              <h3 style="margin:0;color:#1f2937;">🔍 Capsule Trace / Audit Trail</h3>
+              <button onclick="document.getElementById('capsuleTraceModal')?.remove()" style="background:#ef4444;color:white;border:none;padding:8px 16px;border-radius:6px;cursor:pointer;">✕ 關閉</button>
+            </div>
+            <div style="background:#f9fafb;padding:16px;border-radius:8px;font-size:13px;line-height:1.8;">
+              <pre style="margin:0;white-space:pre-wrap;word-wrap:break-word;">${traceLines.join('\n')}</pre>
+            </div>
+            <div style="margin-top:16px;padding-top:16px;border-top:1px solid #e5e7eb;">
+              <strong style="color:#6b7280;font-size:12px;">JSONL Audit Chain Summary</strong>
+              <p style="color:#6b7280;font-size:12px;margin-top:8px;">此追蹤鏈展示了從原始 Proof 到 DAO 授權的完整審計路徑。</p>
+            </div>
+          `;
+        }
+        
+        document.body.appendChild(traceDiv);
+      };
+      
+      // 顯示單個 Capsule 的詳細 JSON
+      window.showCapsuleDetail = function(index) {
+        if (!window.__capsules || !window.__capsules[index]) {
+          alert('找不到 Capsule 資料');
+          return;
+        }
+        
+        const capsule = window.__capsules[index];
+        const jsonStr = JSON.stringify(capsule.raw_data || capsule, null, 2);
+        
+        const detailDiv = document.createElement('div');
+        const detailModalId = `capsuleDetailModal_${index}`;
+        detailDiv.id = detailModalId;
+        detailDiv.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:white;padding:24px;border-radius:12px;box-shadow:0 8px 16px rgba(0,0,0,0.2);max-width:700px;max-height:80vh;overflow:auto;z-index:1001;';
+        detailDiv.innerHTML = `
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+            <h3 style="margin:0;color:#1f2937;">${capsule.module} - ${capsule.capsule_id}</h3>
+            <button onclick="document.getElementById('${detailModalId}')?.remove()" style="background:#ef4444;color:white;border:none;padding:8px 16px;border-radius:6px;cursor:pointer;">✕ 關閉</button>
+          </div>
+          <div style="background:#f9fafb;padding:16px;border-radius:8px;font-family:ui-monospace;font-size:12px;max-height:500px;overflow:auto;">
+            <pre style="margin:0;white-space:pre-wrap;word-wrap:break-word;">${jsonStr}</pre>
+          </div>
+          <div style="margin-top:12px;">
+            <button onclick="navigator.clipboard.writeText('${jsonStr.replace(/'/g, "\\'")}').then(() => alert('已複製 JSON 到剪貼板'))" 
+                    style="background:#6366f1;color:white;border:none;padding:6px 12px;border-radius:4px;cursor:pointer;font-size:12px;">📋 複製 JSON</button>
+          </div>
+        `;
+        document.body.appendChild(detailDiv);
+      };
+      
+      // 根據場景顯示/隱藏 Agent Mode Toggle
+      const agentModeToggleContainer = document.querySelector('#agentModeToggle')?.closest('div');
+      if (agentModeToggleContainer) {
+        agentModeToggleContainer.style.display = 'none'; // 默認隱藏
+      }
+      
+      // 測試拒絕案例函數
+      window.testRejected = async function() {
+        const selectedScenario = window.__lastScenario || 'agent';
+        const resultDiv = document.getElementById('testResult');
+        resultDiv.innerHTML = '<p style="color:#6b7280;">⏳ 測試拒絕案例中...</p>';
+        
+        try {
+          let testUrl = '/api/agent/verify';
+          let testBody = { 
+            agentAddress: 'DEMO_FAIL_AGENT_NOT_TRUSTED',
+            policy: 'agent-policy' // 使用 agent-policy
+          };
+          
+          const apiBase = window.API_BASE_URL || '';
+          const fullUrl = apiBase + testUrl;
+          
+          const resp = await fetch(fullUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(testBody),
+          });
+          
+          if (!resp.ok) {
+            throw new Error(`HTTP ${resp.status}: ${resp.statusText}`);
+          }
+          
+          const data = await resp.json();
+          
+          // 顯示拒絕結果（增強版）
+          let resultHtml = `
+            <div style="padding:12px;background:#fee2e2;border-radius:8px;border-left:4px solid #ef4444;">
+              <strong>❌ 拒絕案例測試</strong><br>
+              <p style="color:#dc2626;margin-top:8px;"><strong>狀態：</strong>${data.status}</p>
+              <p style="color:#dc2626;margin-top:8px;"><strong>原因：</strong>${data.reason || 'N/A'}</p>
+          `;
+          
+          // 顯示 proof_ref 和 capsuleHash（追溯鏈一致）
+          if (data.proof_ref || data.capsuleHash) {
+            resultHtml += `<div style="margin-top:12px;padding:8px;background:#eff6ff;border-radius:6px;font-size:12px;">`;
+            resultHtml += `<strong>🔗 追溯鏈：</strong><br>`;
+            if (data.proof_ref) {
+              resultHtml += `proof_ref: <code style="font-size:11px;">${data.proof_ref.length > 50 ? data.proof_ref.slice(0, 30) + '...' + data.proof_ref.slice(-10) : data.proof_ref}</code><br>`;
+            }
+            if (data.capsuleHash) {
+              resultHtml += `capsuleHash: <code style="font-size:11px;">${data.capsuleHash.length > 50 ? data.capsuleHash.slice(0, 30) + '...' + data.capsuleHash.slice(-10) : data.capsuleHash}</code>`;
+            }
+            resultHtml += `</div>`;
+          }
+          
+          // 顯示 sandbox_score 和 threshold（AI safety framing，視覺化進度條）
+          if (data.sandbox_score !== undefined || data.threshold !== undefined) {
+            const score = data.sandbox_score !== undefined ? data.sandbox_score : 0;
+            const threshold = data.threshold !== undefined ? data.threshold : 0.9;
+            const percentage = Math.min((score / threshold) * 100, 100);
+            const scoreColor = score < threshold ? '#dc2626' : '#10b981';
+            const filledBlocks = Math.floor(percentage / 5); // 每5%一個方塊，共20個
+            const emptyBlocks = 20 - filledBlocks;
+            
+            resultHtml += `<div style="margin-top:12px;padding:12px;background:#fef3c7;border-radius:6px;font-size:12px;">`;
+            resultHtml += `<strong>🧠 安全評估：</strong><br>`;
+            resultHtml += `<div style="margin-top:8px;">`;
+            resultHtml += `<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">`;
+            resultHtml += `<span style="font-weight:bold;color:${scoreColor};">Sandbox Score: ${score.toFixed(2)} / ${threshold}</span>`;
+            resultHtml += `</div>`;
+            resultHtml += `<div style="display:flex;align-items:center;gap:2px;font-family:monospace;font-size:14px;">`;
+            resultHtml += `<span style="color:${scoreColor};">${'█'.repeat(filledBlocks)}</span>`;
+            resultHtml += `<span style="color:#d1d5db;">${'░'.repeat(emptyBlocks)}</span>`;
+            resultHtml += `</div>`;
+            resultHtml += `<p style="margin-top:4px;color:#92400e;font-size:11px;">${score < threshold ? '（安全閾值未達）' : '（已達安全閾值）'}</p>`;
+            resultHtml += `</div>`;
+            
+            if (data.evaluation_result) {
+              resultHtml += `<p style="margin-top:8px;color:#92400e;font-size:11px;">${data.evaluation_result}</p>`;
+            }
+            
+            // 顯示信任政策版本
+            if (data.trust_policy_version) {
+              resultHtml += `<p style="margin-top:8px;color:#6b7280;font-size:10px;">信任政策版本: <code>${data.trust_policy_version}</code></p>`;
+            }
+            
+            resultHtml += `</div>`;
+          }
+          
+          // 顯示 delegation_scope（權限結構閉環）
+          if (data.delegation_scope && Array.isArray(data.delegation_scope)) {
+            resultHtml += `<div style="margin-top:12px;padding:8px;background:#f3f4f6;border-radius:6px;font-size:12px;">`;
+            resultHtml += `<strong>🚫 未授權範疇：</strong><br>`;
+            resultHtml += `delegation_scope: ${data.delegation_scope.map(s => `<code>${s}</code>`).join(', ')}<br>`;
+            if (data.delegation_note) {
+              resultHtml += `<p style="margin-top:4px;color:#6b7280;font-size:11px;">${data.delegation_note}</p>`;
+            }
+            resultHtml += `</div>`;
+          }
+          
+          // 顯示 Trace Capsule（可視化審計鏈）
+          if (data.trace_capsule && Array.isArray(data.trace_capsule)) {
+            resultHtml += `<div style="margin-top:12px;padding:12px;background:#f0f9ff;border-left:4px solid #3b82f6;border-radius:6px;font-size:12px;">`;
+            resultHtml += `<strong style="color:#1e40af;font-size:14px;">🧩 Capsule Trace</strong><br>`;
+            resultHtml += `<div style="margin-top:8px;font-family:monospace;font-size:12px;line-height:1.8;color:#1e293b;">`;
+            data.trace_capsule.forEach((entry) => {
+              const ts = new Date(entry.timestamp).toLocaleString('zh-TW', { 
+                year: 'numeric', month: '2-digit', day: '2-digit',
+                hour: '2-digit', minute: '2-digit', second: '2-digit'
+              });
+              resultHtml += `${ts} | ${entry.action} | ${entry.details}<br>`;
+            });
+            resultHtml += `</div>`;
+            resultHtml += `<p style="margin-top:8px;color:#6b7280;font-size:11px;font-style:italic;">信任是被一步步推導出來的，不只是被判定。</p>`;
+            resultHtml += `</div>`;
+          }
+          
+          // 顯示審計 log 按鈕
+          if (data.audit_log) {
+            resultHtml += `<div style="margin-top:12px;padding:8px;background:#f9fafb;border-radius:6px;font-size:12px;">`;
+            resultHtml += `<button id="btnViewAuditLog" onclick="window.viewAuditLog && window.viewAuditLog()" style="background:#6366f1;color:white;border:none;padding:6px 12px;border-radius:4px;cursor:pointer;font-size:12px;">🗒️ 審計日誌</button>`;
+            resultHtml += `</div>`;
+            // 存儲審計 log 以便查看
+            window.__lastAuditLog = data.audit_log;
+          }
+          
+          if (data.human_readable) {
+            resultHtml += `<div style="margin-top:12px;padding:12px;background:#fef2f2;border-radius:6px;font-size:13px;">`;
+            resultHtml += `<strong>💬 描述：</strong><br>`;
+            resultHtml += `<p style="margin-top:4px;color:#991b1b;">${data.human_readable}</p>`;
+            resultHtml += `</div>`;
+          }
+          
+          if (data.network || data.source) {
+            resultHtml += `<div style="margin-top:12px;padding:8px;background:#f3f4f6;border-radius:6px;font-size:12px;">`;
+            resultHtml += `<strong>🌐 網路資訊：</strong><br>`;
+            if (data.network) {
+              resultHtml += `network: <code>${data.network}</code><br>`;
+            }
+            if (data.source) {
+              resultHtml += `source: <code>${data.source}</code>`;
+            }
+            resultHtml += `</div>`;
+          }
+          
+          resultHtml += `
+              <details style="margin-top:8px;">
+                <summary style="cursor:pointer;color:#3b82f6;">查看完整回應</summary>
+                <pre style="font-size:12px;overflow:auto;max-height:200px;margin-top:8px;padding:8px;background:#f9fafb;border-radius:4px;">${JSON.stringify(data, null, 2)}</pre>
+              </details>
+            </div>
+          `;
+          
+          resultDiv.innerHTML = resultHtml;
+          
+          // 存儲結果以便後續查看
+          window.__lastTestResult = data;
+          window.__lastScenario = selectedScenario;
+        } catch(e) {
+          console.error('拒絕案例測試失敗：', e);
+          resultDiv.innerHTML = `<div style="padding:12px;background:#fee2e2;border-radius:8px;color:#b91c1c;">
+            <strong>❌ 測試失敗</strong><br>
+            <p style="margin-top:4px;font-size:13px;">${String(e)}</p>
+          </div>`;
+        }
+      };
+      
+      // 選擇場景時，如果是 DAO 場景則顯示 toggle，如果是 agent 場景則顯示拒絕案例按鈕
+      const originalSelectScenario = selectScenario;
+      selectScenario = function(key, event) {
+        originalSelectScenario(key, event);
+        if (agentModeToggleContainer) {
+          agentModeToggleContainer.style.display = key === 'dao' ? 'block' : 'none';
+        }
+        // 顯示/隱藏拒絕案例按鈕（僅在 agent 場景）
+        const btnTestRejected = document.getElementById('btnTestRejected');
+        if (btnTestRejected) {
+          btnTestRejected.style.display = key === 'agent' ? 'inline-block' : 'none';
+        }
+        // 顯示/隱藏 Denylist 場景按鈕（在所有場景都可顯示）
+        const btnTestDenylist = document.getElementById('btnTestDenylist');
+        if (btnTestDenylist) {
+          btnTestDenylist.style.display = 'inline-block';
+        }
+        // 隱藏 Trace 按鈕直到有測試結果
+        const btnViewTrace = document.getElementById('btnViewTrace');
+        if (btnViewTrace) {
+          btnViewTrace.style.display = 'none';
+        }
+      };
+      
+      // 將函數暴露到全局作用域（讓 onclick 可以訪問）
+      window.selectScenario = selectScenario;
+      window.SCENARIOS = SCENARIOS;
+      
+      // 測試：直接在 window 上添加一個測試函數
+      window.testClick = function(key) {
+        console.log('測試點擊：', key);
+        alert('測試點擊：' + key);
+        selectScenario(key, null);
+      };
+
+      // 測試場景
+      async function testScenario() {
+        if (!selectedScenario) {
+          alert('請先選擇一個場景');
+          return;
+        }
+        
+        const resultDiv = document.getElementById('testResult');
+        resultDiv.innerHTML = '<p style="color:#6b7280;">⏳ 測試中...</p>';
+        
+        try {
+          let testUrl = '';
+          let testBody = {};
+          
+          switch(selectedScenario) {
+            case 'rwa':
+              // RWA 流程：先驗證身份，再驗證文件雜湊
+              // 為了完整展示流程，我們會依序調用兩個 API
+              testUrl = '/api/self/verify-by-tx';
+              testBody = { txHash: 'DEMO_SUCCESS_TW' };
+              
+              // 先驗證身份（在 switch 外處理）
+              break;
+            case 'social':
+              testUrl = '/api/social/verify';
+              testBody = { txHash: 'DEMO_SUCCESS_TW' };
+              break;
+            case 'dao':
+              // DAO 流程：先授權，再驗證提案（包含文件雜湊審計）
+              testUrl = '/api/dao/auth';
+              // 檢查是否啟用 Proof-of-Agent 模式
+              const agentModeToggle = document.getElementById('agentModeToggle');
+              const isAgentMode = agentModeToggle && agentModeToggle.checked;
+              
+              if (isAgentMode) {
+                // Proof-of-Agent DAO voter 模式
+                testBody = { 
+                  agentAddress: '0x1234567890abcdef1234567890abcdef12345678',
+                  actions: ['vote', 'propose'] // 支持多種行為
+                };
+              } else {
+                // Proof-of-Human DAO voter 模式
+                testBody = { 
+                  txHash: 'DEMO_SUCCESS_TW', 
+                  actions: ['vote', 'propose'] // 使用新的 actions 數組設計
+                };
+              }
+              
+              // 先授權，然後驗證提案（包含文件雜湊）
+              // 這會在 switch 外處理
+              break;
+            case 'agent':
+              testUrl = '/api/agent/verify';
+              // 從 Policy 選擇器獲取 policy
+              const policySelect = document.getElementById('policySelect');
+              const selectedPolicy = policySelect ? policySelect.value : 'agent-policy';
+              testBody = { 
+                agentAddress: '0x1234567890abcdef1234567890abcdef12345678',
+                policy: selectedPolicy // 使用選擇的 policy
+              };
+              break;
+            default:
+              testUrl = '/api/self/verify-by-tx';
+              testBody = { txHash: 'DEMO_SUCCESS_TW' };
+          }
+          
+          const startTime = Date.now();
+          
+          // 檢查 Firebase Functions 是否運行（通過檢查 config.js 或使用相對路徑）
+          // 如果 Firebase Functions 在 localhost:5001，需要處理 CORS 或使用代理
+          const apiBase = window.API_BASE_URL || '';
+          
+          // RWA 場景的特殊處理：先驗證身份，再驗證文件雜湊
+          if (selectedScenario === 'rwa' && testUrl === '/api/self/verify-by-tx') {
+            try {
+              // 先驗證身份
+              const verifyResp = await fetch(apiBase + testUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(testBody),
+              });
+              
+              if (verifyResp.ok) {
+                const verifyData = await verifyResp.json();
+                
+                // 然後驗證文件雜湊（使用 proof_ref 作為關聯）
+                const docHash = '0x' + Array.from({length: 64}, () => Math.floor(Math.random() * 16).toString(16)).join('');
+                testUrl = '/api/doc/hash-verify';
+                testBody = { 
+                  docHash: docHash,
+                  docType: 'lease_agreement',
+                  proof_ref: verifyData.proof_ref || verifyData.capsuleHash || null,
+                };
+              } else {
+                // 如果身份驗證失敗，直接測試文件雜湊驗證
+                const docHash = '0x' + Array.from({length: 64}, () => Math.floor(Math.random() * 16).toString(16)).join('');
+                testUrl = '/api/doc/hash-verify';
+                testBody = { 
+                  docHash: docHash,
+                  docType: 'lease_agreement',
+                };
+              }
+            } catch (e) {
+              console.log('RWA 流程：跳過身份驗證，直接測試文件雜湊驗證', e);
+              // 如果身份驗證失敗，直接測試文件雜湊驗證
+              const docHash = '0x' + Array.from({length: 64}, () => Math.floor(Math.random() * 16).toString(16)).join('');
+              testUrl = '/api/doc/hash-verify';
+              testBody = { 
+                docHash: docHash,
+                docType: 'lease_agreement',
+              };
+            }
+          }
+          
+          // DAO 場景的特殊處理：先授權，再驗證提案（包含文件雜湊審計）
+          if (selectedScenario === 'dao' && testUrl === '/api/dao/auth') {
+            try {
+              // 先授權
+              const authResp = await fetch(apiBase + testUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(testBody),
+              });
+              
+              if (authResp.ok) {
+                const authData = await authResp.json();
+                
+                // 然後驗證提案（包含文件雜湊審計，展示 DAO → RWA → Audit 鏈路）
+                const docHash = '0x' + Array.from({length: 64}, () => Math.floor(Math.random() * 16).toString(16)).join('');
+                testUrl = '/api/dao/proposal-verify';
+                testBody = { 
+                  proposalId: `PROP-${Date.now()}`,
+                  docHash: docHash,
+                  proof_ref: authData.proof_ref || authData.capsuleHash || null,
+                  agentAddress: testBody.agentAddress || null,
+                  txHash: testBody.txHash || null,
+                };
+              } else {
+                // 如果授權失敗，直接測試提案驗證
+                const docHash = '0x' + Array.from({length: 64}, () => Math.floor(Math.random() * 16).toString(16)).join('');
+                testUrl = '/api/dao/proposal-verify';
+                testBody = { 
+                  proposalId: `PROP-${Date.now()}`,
+                  docHash: docHash,
+                };
+              }
+            } catch (e) {
+              console.log('DAO 流程：跳過授權，直接測試提案驗證', e);
+              // 如果授權失敗，直接測試提案驗證
+              const docHash = '0x' + Array.from({length: 64}, () => Math.floor(Math.random() * 16).toString(16)).join('');
+              testUrl = '/api/dao/proposal-verify';
+              testBody = { 
+                proposalId: `PROP-${Date.now()}`,
+                docHash: docHash,
+              };
+            }
+          }
+          
+          let fullUrl = apiBase + testUrl;
+          
+          // 如果 API_BASE_URL 未設置，嘗試使用相對路徑（Firebase Hosting 會代理到 Functions）
+          // 如果是在本地開發，可能需要使用 http://localhost:5001 或通過 Firebase Hosting 代理
+          
+          const resp = await fetch(fullUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(testBody),
+          });
+          
+          if (!resp.ok) {
+            // 嘗試解析錯誤訊息
+            let errorMsg = `HTTP ${resp.status}: ${resp.statusText}`;
+            try {
+              const errorData = await resp.text();
+              if (errorData) {
+                try {
+                  const errorJson = JSON.parse(errorData);
+                  errorMsg = errorJson.error || errorJson.message || errorMsg;
+                } catch {
+                  // 如果不是 JSON，使用原始文字
+                  if (errorData.length < 200) {
+                    errorMsg = errorData;
+                  }
+                }
+              }
+            } catch {}
+            throw new Error(errorMsg);
+          }
+          
+          // 檢查回應是否為 JSON
+          const contentType = resp.headers.get('content-type');
+          if (!contentType || !contentType.includes('application/json')) {
+            const text = await resp.text();
+            throw new Error(`API 返回非 JSON 格式（${contentType}）。請確認 Firebase Functions 正在運行。`);
+          }
+          
+          const elapsed = Date.now() - startTime;
+          const data = await resp.json();
+          
+          // 保存 capsuleHash 到 localStorage（供 statusSummary.js 讀取）
+          if (data.capsuleHash || data.capsule_hash) {
+            const capsuleHash = data.capsuleHash || data.capsule_hash;
+            localStorage.setItem('last_capsule_hash', capsuleHash);
+            
+            // 追加到 audit log（本地和後端）
+            try {
+              // 獲取上一筆記錄的 record_hash（建立鏈式關係）
+              const existingLog = localStorage.getItem('audit_log_jsonl') || '';
+              let prevHash = null;
+              if (existingLog) {
+                try {
+                  const lines = existingLog.trim().split('\n').filter(line => line.trim());
+                  if (lines.length > 0) {
+                    const lastLine = JSON.parse(lines[lines.length - 1]);
+                    prevHash = lastLine.record_hash || null;
+                  }
+                } catch (e) {
+                  console.warn('解析上一筆記錄失敗:', e);
+                }
+              }
+              
+              // 計算 record_hash（需要在計算前構建，不包含 record_hash）
+              // 注意：必須與後端 calculateRecordHash 的 excludedFields 完全一致
+              async function calculateRecordHash(data) {
+                // 排除 record_hash 本身，以及後端添加的欄位
+                const excludedFields = [
+                  'record_hash',
+                  'audit_id',
+                  'ipfs_cid',
+                  'ipfs_url',
+                  'audit_saved',
+                  'audit_error',
+                  'created_at',
+                  'source',   // 後端添加的元數據
+                  'version'  // 後端添加的元數據
+                ];
+                
+                const hashData = {};
+                Object.keys(data).forEach(key => {
+                  if (!excludedFields.includes(key)) {
+                    hashData[key] = data[key];
+                  }
+                });
+                
+                // 穩定排序的 JSON 字符串
+                const sortedKeys = Object.keys(hashData).sort();
+                const jsonObj = {};
+                sortedKeys.forEach(key => jsonObj[key] = hashData[key]);
+                const jsonString = JSON.stringify(jsonObj);
+                // 使用 Web Crypto API 計算 SHA-256
+                const encoder = new TextEncoder();
+                const dataBuf = encoder.encode(jsonString);
+                const hashBuf = await crypto.subtle.digest('SHA-256', dataBuf);
+                const hashArray = Array.from(new Uint8Array(hashBuf));
+                const hashHex = '0x' + hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+                return hashHex;
+              }
+              
+              // 構建 audit log 記錄（先不包含 record_hash）
+              const auditEntryBase = {
+                timestamp: new Date().toISOString(),
+                action: data.context || 'VERIFICATION',
+                status: data.status || 'verified',
+                capsuleHash: capsuleHash,
+                scenario: selectedScenario,
+                policy: data.policy_id || document.getElementById('policySelect')?.value || 'agent-policy',
+                prev_hash: prevHash, // 上一筆的 record_hash
+                ...Object.fromEntries(
+                  Object.entries(data).filter(([key]) => key !== 'record_hash')
+                )
+              };
+              
+              // 計算並添加 record_hash
+              const recordHash = await calculateRecordHash(auditEntryBase);
+              const auditEntry = {
+                ...auditEntryBase,
+                record_hash: recordHash
+              };
+              
+              // 1. 保存到 localStorage（本地備份）
+              const newLine = JSON.stringify(auditEntry);
+              localStorage.setItem('audit_log_jsonl', existingLog + (existingLog ? '\n' : '') + newLine);
+              
+              // 2. 發送到後端 Firestore（持久化）
+              try {
+                const apiBase = window.API_BASE_URL || '';
+                console.log('📤 發送 audit log 到後端:', apiBase + '/api/audit');
+                const auditResp = await fetch(apiBase + '/api/audit', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify(auditEntry),
+                });
+                
+                console.log('📥 Audit log 響應狀態:', auditResp.status, auditResp.statusText);
+                
+                if (auditResp.ok) {
+                  const auditResult = await auditResp.json();
+                  console.log('✅ Audit log 響應:', auditResult);
+                  // 保存 audit_id 和 IPFS CID 到 auditEntry（用於顯示）
+                  auditEntry.audit_id = auditResult.audit_id;
+                  auditEntry.audit_saved = true;
+                  
+                  // 如果後端返回 IPFS CID，保存它
+                  if (auditResult.ipfs_cid) {
+                    auditEntry.ipfs_cid = auditResult.ipfs_cid;
+                    auditEntry.ipfs_url = auditResult.ipfs_url;
+                    window.__lastIpfsCid = auditResult.ipfs_cid;
+                    window.__lastIpfsUrl = auditResult.ipfs_url;
+                  }
+                  
+                  // 保存 audit_id 到全局變數（用於結果顯示）
+                  window.__lastAuditId = auditResult.audit_id;
+                  
+                  // 更新 localStorage 中的記錄（添加 audit_id 和 IPFS CID）
+                  // 注意：這些欄位不會影響 record_hash，因為 hash 計算時已排除這些欄位
+                  const updatedLine = JSON.stringify(auditEntry);
+                  // 需要找到並替換對應的行（而不是追加）
+                  const lines = existingLog.split('\n').filter(line => line.trim());
+                  // 找到最後一行（應該是最新添加的）
+                  if (lines.length > 0) {
+                    // 替換最後一行
+                    lines[lines.length - 1] = updatedLine;
+                    const updatedLog = lines.join('\n');
+                    localStorage.setItem('audit_log_jsonl', updatedLog);
+                  } else {
+                    localStorage.setItem('audit_log_jsonl', updatedLine);
+                  }
+                } else {
+                  console.warn('後端保存 audit log 失敗:', auditResp.status);
+                  auditEntry.audit_saved = false;
+                  auditEntry.audit_error = `HTTP ${auditResp.status}`;
+                  window.__lastAuditId = null;
+                }
+              } catch (e) {
+                console.warn('發送 audit log 到後端失敗:', e);
+                auditEntry.audit_saved = false;
+                auditEntry.audit_error = String(e);
+                // 顯示錯誤到頁面（幫助調試）
+                console.error('❌ Audit log 保存失敗:', e);
+              }
+              
+              // 觸發 statusSummary 更新
+              const event = new CustomEvent('auditLogUpdated');
+              window.dispatchEvent(event);
+            } catch (e) {
+              console.error('保存 audit log 失敗:', e);
+            }
+          }
+          
+          // 更新狀態指示器
+          if (data.capsuleHash || data.capsule_hash) {
+            const lastCapsuleEl = document.getElementById('lastCapsule');
+            const lastVerifiedTimeEl = document.getElementById('lastVerifiedTime');
+            if (lastCapsuleEl) {
+              const capsuleHash = data.capsuleHash || data.capsule_hash;
+              const shortHash = capsuleHash.length > 20 
+                ? capsuleHash.slice(0, 10) + '...' + capsuleHash.slice(-8)
+                : capsuleHash;
+              lastCapsuleEl.textContent = shortHash;
+              lastCapsuleEl.style.color = '#2563eb';
+            }
+            if (lastVerifiedTimeEl) {
+              const now = new Date();
+              const timeStr = now.toLocaleString('zh-TW', { 
+                year: 'numeric', month: '2-digit', day: '2-digit',
+                hour: '2-digit', minute: '2-digit', second: '2-digit'
+              });
+              lastVerifiedTimeEl.textContent = timeStr;
+              
+              // 更新延遲（基於實際請求時間）
+              const latencyEl = document.getElementById('latency');
+              if (latencyEl) {
+                latencyEl.textContent = (elapsed / 1000).toFixed(1) + 's';
+              }
+              
+              // 模擬 Block Height 更新（每次驗證後增加）
+              const blockHeightEl = document.getElementById('blockHeight');
+              if (blockHeightEl) {
+                const currentHeight = parseInt(blockHeightEl.textContent.replace(/,/g, '') || '8594544');
+                blockHeightEl.textContent = (currentHeight + 1).toLocaleString();
+              }
+            }
+          }
+          
+          // 存儲結果以便後續查看 Trace
+          window.__lastTestResult = data;
+          window.__lastScenario = selectedScenario;
+          
+          // 如果返回了 proof_ref 或 capsuleHash，顯示 Trace 按鈕
+          const btnViewTrace = document.getElementById('btnViewTrace');
+          if (btnViewTrace && (data.proof_ref || data.capsuleHash || data.trace)) {
+            btnViewTrace.style.display = 'inline-block';
+          }
+          
+          // DAO 提案驗證結果（DAO → RWA → Audit 鏈路特殊處理）
+          if (selectedScenario === 'dao' && data.status === 'verified' && data.context === 'dao-proposal-verification') {
+            let resultHtml = `
+              <div style="padding:16px;background:#f0fdf4;border-radius:8px;border-left:4px solid #3b82f6;">
+                <strong style="font-size:16px;color:#3b82f6;">✅ DAO 章程提案驗證成功</strong><br>
+                <small style="color:#6b7280;">耗時：${elapsed}ms (${(elapsed/1000).toFixed(2)}秒)</small><br>
+                <div style="margin-top:16px;">
+                  <div style="padding:12px;background:white;border-radius:6px;margin-bottom:12px;">
+                    <strong style="color:#1f2937;font-size:14px;">📋 提案資訊：</strong><br>
+                    <div style="margin-top:8px;font-size:13px;">
+                      <strong>提案 ID：</strong><code style="font-size:11px;background:#f3f4f6;padding:2px 6px;border-radius:4px;">${data.proposal_id || 'N/A'}</code><br>
+                      <strong>文件類型：</strong>${data.doc_type_label || data.doc_type || '章程提案'}<br>
+                      <strong>文件雜湊：</strong><code style="font-size:11px;background:#f3f4f6;padding:2px 6px;border-radius:4px;">${data.doc_hash ? (data.doc_hash.length > 50 ? data.doc_hash.slice(0, 30) + '...' + data.doc_hash.slice(-10) : data.doc_hash) : 'N/A'}</code>
+                    </div>
+                  </div>
+            `;
+            
+            // 顯示 DAO → RWA → Audit 審計鏈
+            if (data.audit_chain && Array.isArray(data.audit_chain)) {
+              resultHtml += `
+                <div style="margin-top:12px;padding:12px;background:#eff6ff;border-left:4px solid #3b82f6;border-radius:6px;">
+                  <strong style="color:#1e40af;font-size:14px;">🔗 DAO → RWA → Audit 審計鏈</strong><br>
+                  <div style="margin-top:8px;font-family:monospace;font-size:12px;line-height:1.8;color:#1e293b;">
+              `;
+              data.audit_chain.forEach((entry, index) => {
+                const ts = new Date(entry.timestamp).toLocaleString('zh-TW', { 
+                  year: 'numeric', month: '2-digit', day: '2-digit',
+                  hour: '2-digit', minute: '2-digit', second: '2-digit'
+                });
+                const stageEmoji = entry.stage === 'DAO_PROPOSAL' ? '🏛️' : entry.stage === 'RWA_COMPLIANCE' ? '🏠' : '📋';
+                resultHtml += `${ts} | ${stageEmoji} ${entry.stage} | ${entry.action} | ${entry.details}<br>`;
+              });
+              resultHtml += `
+                  </div>
+                </div>
+              `;
+              
+              // 顯示審計摘要
+              if (data.audit_summary) {
+                resultHtml += `
+                  <div style="margin-top:12px;padding:12px;background:#f9fafb;border-radius:6px;font-size:13px;">
+                    <strong style="color:#1f2937;font-size:14px;">📊 審計摘要：</strong><br>
+                    <div style="margin-top:8px;color:#6b7280;">
+                      <div style="margin-bottom:4px;">${data.audit_summary.dao_stage || ''}</div>
+                      <div style="margin-bottom:4px;">${data.audit_summary.rwa_stage || ''}</div>
+                      <div style="margin-bottom:4px;">${data.audit_summary.audit_stage || ''}</div>
+                      ${data.audit_summary.chain_complete ? '<div style="margin-top:8px;color:#10b981;font-weight:bold;">✅ 審計鏈完整：DAO → RWA → Audit 一線貫通</div>' : ''}
+                    </div>
+                  </div>
+                `;
+              }
+            }
+            
+            // 顯示 Capsule Hash
+            if (data.capsuleHash) {
+              resultHtml += `
+                <div style="margin-top:12px;padding:8px;background:#f3f4f6;border-radius:6px;font-size:12px;">
+                  <strong>🧩 Proposal Capsule:</strong><br>
+                  capsuleHash: <code style="font-size:11px;">${data.capsuleHash.length > 50 ? data.capsuleHash.slice(0, 30) + '...' + data.capsuleHash.slice(-10) : data.capsuleHash}</code>
+                </div>
+              `;
+            }
+            
+            // 顯示 proof_ref（如果有的話，表示與授權關聯）
+            if (data.proof_ref) {
+              resultHtml += `
+                <div style="margin-top:12px;padding:8px;background:#eff6ff;border-radius:6px;font-size:12px;">
+                  <strong>🔗 授權關聯：</strong><br>
+                  proof_ref: <code style="font-size:11px;">${data.proof_ref.length > 50 ? data.proof_ref.slice(0, 30) + '...' + data.proof_ref.slice(-10) : data.proof_ref}</code>
+                </div>
+              `;
+            }
+            
+            // 顯示網路資訊
+            if (data.network || data.source || data.verifier) {
+              resultHtml += `
+                <div style="margin-top:12px;padding:8px;background:#f3f4f6;border-radius:6px;font-size:12px;">
+                  <strong>🌐 網路資訊：</strong><br>
+                  ${data.network ? `network: <code>${data.network}</code><br>` : ''}
+                  ${data.source ? `source: <code>${data.source}</code><br>` : ''}
+                  ${data.verifier ? `verifier: <code>${data.verifier}</code><br>` : ''}
+                  ${data.policy_module ? `policy_module: <code>${data.policy_module}</code><br>` : ''}
+                  ${data.trust_policy_version ? `trust_policy_version: <code>${data.trust_policy_version}</code>` : ''}
+                </div>
+              `;
+            }
+            
+            // 顯示人類可讀描述
+            if (data.human_readable) {
+              resultHtml += `
+                <div style="margin-top:12px;padding:12px;background:#f0f9ff;border-left:4px solid #3b82f6;border-radius:6px;font-size:13px;">
+                  <strong>💬 描述：</strong><br>
+                  <p style="margin-top:4px;color:#1e40af;">${data.human_readable}</p>
+                </div>
+              `;
+            }
+            
+            resultHtml += `
+                </div>
+              </div>
+            `;
+            resultDiv.innerHTML = resultHtml;
+            return;
+          }
+          
+          // 文件雜湊驗證結果（RWA 流程特殊處理）
+          if (selectedScenario === 'rwa' && data.status === 'verified' && data.context === 'document-hash-verification') {
+            let resultHtml = `
+              <div style="padding:16px;background:#f0fdf4;border-radius:8px;border-left:4px solid #10b981;">
+                <strong style="font-size:16px;color:#10b981;">✅ 文件雜湊驗證成功</strong><br>
+                <small style="color:#6b7280;">耗時：${elapsed}ms (${(elapsed/1000).toFixed(2)}秒)</small><br>
+                <div style="margin-top:16px;">
+                  <div style="padding:12px;background:white;border-radius:6px;margin-bottom:12px;">
+                    <strong style="color:#1f2937;font-size:14px;">📄 文件資訊：</strong><br>
+                    <div style="margin-top:8px;font-size:13px;">
+                      <strong>文件類型：</strong>${data.doc_type_label || data.doc_type || '未知'}<br>
+                      <strong>文件雜湊：</strong><code style="font-size:11px;background:#f3f4f6;padding:2px 6px;border-radius:4px;">${data.doc_hash ? (data.doc_hash.length > 50 ? data.doc_hash.slice(0, 30) + '...' + data.doc_hash.slice(-10) : data.doc_hash) : 'N/A'}</code><br>
+                    </div>
+                  </div>
+            `;
+            
+            // 顯示 Capsule Hash
+            if (data.capsuleHash) {
+              resultHtml += `
+                <div style="margin-top:12px;padding:8px;background:#f3f4f6;border-radius:6px;font-size:12px;">
+                  <strong>🧩 Document Capsule:</strong><br>
+                  capsuleHash: <code style="font-size:11px;">${data.capsuleHash.length > 50 ? data.capsuleHash.slice(0, 30) + '...' + data.capsuleHash.slice(-10) : data.capsuleHash}</code>
+                </div>
+              `;
+            }
+            
+            // 顯示 proof_ref（如果有的話，表示與身份驗證關聯）
+            if (data.proof_ref) {
+              resultHtml += `
+                <div style="margin-top:12px;padding:8px;background:#eff6ff;border-radius:6px;font-size:12px;">
+                  <strong>🔗 身份驗證關聯：</strong><br>
+                  proof_ref: <code style="font-size:11px;">${data.proof_ref.length > 50 ? data.proof_ref.slice(0, 30) + '...' + data.proof_ref.slice(-10) : data.proof_ref}</code>
+                </div>
+              `;
+            }
+            
+            // 顯示驗證詳情
+            if (data.verification_details) {
+              resultHtml += `
+                <div style="margin-top:12px;padding:12px;background:#f9fafb;border-radius:6px;font-size:12px;">
+                  <strong>🔍 驗證詳情：</strong><br>
+                  <div style="margin-top:8px;color:#6b7280;font-size:12px;">
+                    <strong>雜湊算法：</strong>${data.verification_details.hash_algorithm || 'N/A'}<br>
+                    <strong>驗證方法：</strong>${data.verification_details.verification_method || 'N/A'}<br>
+                    <strong>時間戳：</strong>${data.verification_details.timestamp ? new Date(data.verification_details.timestamp).toLocaleString('zh-TW') : 'N/A'}
+                  </div>
+                </div>
+              `;
+            }
+            
+            // 顯示網路資訊
+            if (data.network || data.source || data.verifier) {
+              resultHtml += `
+                <div style="margin-top:12px;padding:8px;background:#f3f4f6;border-radius:6px;font-size:12px;">
+                  <strong>🌐 網路資訊：</strong><br>
+                  ${data.network ? `network: <code>${data.network}</code><br>` : ''}
+                  ${data.source ? `source: <code>${data.source}</code><br>` : ''}
+                  ${data.verifier ? `verifier: <code>${data.verifier}</code><br>` : ''}
+                  ${data.policy_module ? `policy_module: <code>${data.policy_module}</code><br>` : ''}
+                  ${data.trust_policy_version ? `trust_policy_version: <code>${data.trust_policy_version}</code>` : ''}
+                </div>
+              `;
+            }
+            
+            // 顯示人類可讀描述
+            if (data.human_readable) {
+              resultHtml += `
+                <div style="margin-top:12px;padding:12px;background:#f0f9ff;border-left:4px solid #3b82f6;border-radius:6px;font-size:13px;">
+                  <strong>💬 描述：</strong><br>
+                  <p style="margin-top:4px;color:#1e40af;">${data.human_readable}</p>
+                </div>
+              `;
+            }
+            
+            resultHtml += `
+                </div>
+              </div>
+            `;
+            resultDiv.innerHTML = resultHtml;
+            return;
+          }
+          
+          // 社交聲譽驗證結果（特殊處理）
+          if (selectedScenario === 'social' && data.status === 'verified') {
+            const reputationScore = data.reputation_score || 0;
+            const reputationLevel = data.reputation_level || 'medium';
+            const levelColor = reputationScore >= 80 ? '#10b981' : reputationScore >= 60 ? '#f59e0b' : '#ef4444';
+            const levelText = reputationScore >= 80 ? '高' : reputationScore >= 60 ? '中' : '低';
+            
+            // 計算聲譽分數的進度條
+            const percentage = reputationScore;
+            const filledBlocks = Math.floor(percentage / 5); // 每5%一個方塊，共20個
+            const emptyBlocks = 20 - filledBlocks;
+            
+            let resultHtml = `
+              <div style="padding:16px;background:#f0fdf4;border-radius:8px;border-left:4px solid ${levelColor};">
+                <strong style="font-size:16px;color:${levelColor};">✅ 社交聲譽驗證成功</strong><br>
+                <small style="color:#6b7280;">耗時：${elapsed}ms (${(elapsed/1000).toFixed(2)}秒)</small><br>
+                <div style="margin-top:16px;">
+                  <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px;">
+                    <strong style="color:${levelColor};font-size:18px;">⭐ Reputation Score: ${reputationScore} / 100</strong>
+                    <span style="padding:4px 12px;background:${levelColor};color:white;border-radius:12px;font-size:12px;font-weight:bold;">${levelText}聲譽</span>
+                  </div>
+                  <div style="display:flex;align-items:center;gap:2px;font-family:monospace;font-size:16px;margin-bottom:8px;">
+                    <span style="color:${levelColor};">${'█'.repeat(filledBlocks)}</span>
+                    <span style="color:#d1d5db;">${'░'.repeat(emptyBlocks)}</span>
+                  </div>
+                </div>
+            `;
+            
+            // 顯示聲譽因素
+            if (data.reputation_factors && Array.isArray(data.reputation_factors)) {
+              resultHtml += `
+                <div style="margin-top:12px;padding:12px;background:white;border-radius:6px;">
+                  <strong style="color:#1f2937;font-size:14px;">📊 聲譽評估因素：</strong><br>
+                  <ul style="margin-top:8px;padding-left:20px;color:#6b7280;font-size:13px;">
+                    ${data.reputation_factors.map(factor => `<li>${factor}</li>`).join('')}
+                  </ul>
+                </div>
+              `;
+            }
+            
+            // 顯示 Capsule Hash
+            if (data.capsuleHash) {
+              resultHtml += `
+                <div style="margin-top:12px;padding:8px;background:#f3f4f6;border-radius:6px;font-size:12px;">
+                  <strong>🧩 Reputation Capsule:</strong><br>
+                  capsuleHash: <code style="font-size:11px;">${data.capsuleHash.length > 50 ? data.capsuleHash.slice(0, 30) + '...' + data.capsuleHash.slice(-10) : data.capsuleHash}</code>
+                </div>
+              `;
+            }
+            
+            // 顯示網路資訊
+            if (data.network || data.source || data.verifier) {
+              resultHtml += `
+                <div style="margin-top:12px;padding:8px;background:#f3f4f6;border-radius:6px;font-size:12px;">
+                  <strong>🌐 網路資訊：</strong><br>
+                  ${data.network ? `network: <code>${data.network}</code><br>` : ''}
+                  ${data.source ? `source: <code>${data.source}</code><br>` : ''}
+                  ${data.verifier ? `verifier: <code>${data.verifier}</code><br>` : ''}
+                  ${data.policy_module ? `policy_module: <code>${data.policy_module}</code><br>` : ''}
+                  ${data.trust_policy_version ? `trust_policy_version: <code>${data.trust_policy_version}</code>` : ''}
+                </div>
+              `;
+            }
+            
+            // 顯示人類可讀描述
+            if (data.human_readable) {
+              resultHtml += `
+                <div style="margin-top:12px;padding:12px;background:#f0f9ff;border-left:4px solid #3b82f6;border-radius:6px;font-size:13px;">
+                  <strong>💬 描述：</strong><br>
+                  <p style="margin-top:4px;color:#1e40af;">${data.human_readable}</p>
+                </div>
+              `;
+            }
+            
+            resultHtml += `</div>`;
+            resultDiv.innerHTML = resultHtml;
+            return;
+          }
+          
+          // 構建顯示內容
+          let resultHtml = `
+            <div style="padding:12px;background:#f0fdf4;border-radius:8px;">
+              <strong>✅ 測試成功</strong><br>
+              <small>耗時：${elapsed}ms (${(elapsed/1000).toFixed(2)}秒)</small><br>
+              ${data.status === 'verified' || data.status === 'authorized' ? 
+                '<p style="color:#10b981;margin-top:8px;"><strong>✓ 驗證通過</strong></p>' : ''}
+          `;
+          
+          // 顯示 actions（新設計）
+          if (data.actions && Array.isArray(data.actions)) {
+            resultHtml += `<p style="margin-top:8px;"><strong>授權行為：</strong>${data.actions.map(a => {
+              const labels = {
+                'vote': '投票',
+                'propose': '提案',
+                'sign': '簽署',
+                'whitelist': '白名單',
+                'access': '訪問',
+              };
+              return labels[a] || a;
+            }).join('、')}</p>`;
+          }
+          
+          // 顯示權限
+          if (data.permissions && Array.isArray(data.permissions)) {
+            resultHtml += `<p style="margin-top:8px;"><strong>權限：</strong>${data.permissions.join(', ')}</p>`;
+          }
+          
+          // 顯示 proof_ref 追溯鏈
+          if (data.proof_ref || data.capsuleHash) {
+            resultHtml += `<div style="margin-top:12px;padding:8px;background:#eff6ff;border-radius:6px;font-size:12px;">`;
+            resultHtml += `<strong>🔗 追溯鏈：</strong><br>`;
+            if (data.proof_ref) {
+              resultHtml += `proof_ref: <code style="font-size:11px;">${data.proof_ref.length > 50 ? data.proof_ref.slice(0, 30) + '...' + data.proof_ref.slice(-10) : data.proof_ref}</code><br>`;
+            }
+            if (data.capsuleHash) {
+              resultHtml += `capsuleHash: <code style="font-size:11px;">${data.capsuleHash.length > 50 ? data.capsuleHash.slice(0, 30) + '...' + data.capsuleHash.slice(-10) : data.capsuleHash}</code>`;
+            }
+            resultHtml += `</div>`;
+          }
+          
+          // 顯示 Agent 相關信息（如果是 Agent 模式）
+          if (data.verification?.agent_signature || data.verification?.agentType === 'ai-agent' || data.can_delegate || data.sandbox_score) {
+            resultHtml += `<div style="margin-top:12px;padding:8px;background:#fef3c7;border-radius:6px;font-size:12px;">`;
+            resultHtml += `<strong>🤖 Proof-of-Agent：</strong><br>`;
+            if (data.verification?.agent_signature) {
+              resultHtml += `agent_signature: <code style="font-size:11px;">${data.verification.agent_signature.slice(0, 20)}...${data.verification.agent_signature.slice(-10)}</code><br>`;
+            }
+            if (data.verification?.model) {
+              resultHtml += `model: ${data.verification.model}<br>`;
+            }
+            // 視覺化顯示 sandbox_score（成功案例）
+            if (data.sandbox_score !== undefined || data.verification?.sandbox_score !== undefined) {
+              const score = data.sandbox_score !== undefined ? data.sandbox_score : (data.verification?.sandbox_score || 0);
+              const threshold = data.threshold !== undefined ? data.threshold : 0.9;
+              const percentage = Math.min((score / threshold) * 100, 100);
+              const scoreColor = score >= threshold ? '#10b981' : '#f59e0b';
+              const filledBlocks = Math.floor(percentage / 5);
+              const emptyBlocks = 20 - filledBlocks;
+              
+              resultHtml += `<div style="margin-top:8px;">`;
+              resultHtml += `<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">`;
+              resultHtml += `<span style="font-weight:bold;color:${scoreColor};">Sandbox Score: ${score.toFixed(2)} / ${threshold}</span>`;
+              resultHtml += `</div>`;
+              resultHtml += `<div style="display:flex;align-items:center;gap:2px;font-family:monospace;font-size:14px;">`;
+              resultHtml += `<span style="color:${scoreColor};">${'█'.repeat(filledBlocks)}</span>`;
+              resultHtml += `<span style="color:#d1d5db;">${'░'.repeat(emptyBlocks)}</span>`;
+              resultHtml += `</div>`;
+              resultHtml += `<p style="margin-top:4px;color:#92400e;font-size:11px;">${score >= threshold ? '（已達安全閾值）' : '（接近安全閾值）'}</p>`;
+              resultHtml += `</div>`;
+            }
+            // 顯示信任政策版本
+            if (data.trust_policy_version) {
+              resultHtml += `<p style="margin-top:8px;color:#6b7280;font-size:10px;">信任政策版本: <code>${data.trust_policy_version}</code></p>`;
+            }
+            // 顯示 Agent → DAO 代理權限
+            if (data.can_delegate !== undefined) {
+              resultHtml += `<br><strong>🔗 代理權限：</strong><br>`;
+              resultHtml += `can_delegate: ${data.can_delegate ? '✅ 是' : '❌ 否'}<br>`;
+              if (data.delegate_scope && Array.isArray(data.delegate_scope)) {
+                resultHtml += `delegate_scope: ${data.delegate_scope.join(', ')}`;
+              }
+            }
+            resultHtml += `</div>`;
+          }
+          
+          // 顯示人類可讀描述
+          if (data.human_readable) {
+            resultHtml += `<div style="margin-top:12px;padding:12px;background:#f0f9ff;border-left:4px solid #3b82f6;border-radius:6px;font-size:13px;">`;
+            resultHtml += `<strong>💬 描述：</strong><br>`;
+            resultHtml += `<p style="margin-top:4px;color:#1e40af;">${data.human_readable}</p>`;
+            resultHtml += `</div>`;
+          }
+          
+          // 顯示 audit_id 和 IPFS CID（如果已保存到後端）
+          if (window.__lastAuditId) {
+            resultHtml += `<div style="margin-top:12px;padding:8px;background:#dcfce7;border-left:3px solid #10b981;border-radius:6px;font-size:12px;">`;
+            resultHtml += `<strong style="color:#166534;">✅ 已保存到後端儲存</strong><br>`;
+            resultHtml += `<span style="color:#166534;font-size:11px;">`;
+            resultHtml += `Firestore ID: <code style="background:#fff;padding:2px 6px;border-radius:4px;font-family:ui-monospace;">${window.__lastAuditId}</code>`;
+            
+            // 如果有 IPFS CID，顯示它
+            if (window.__lastIpfsCid) {
+              resultHtml += `<br style="margin-top:6px;">`;
+              resultHtml += `🌐 IPFS CID: <code style="background:#fff;padding:2px 6px;border-radius:4px;font-family:ui-monospace;color:#3b82f6;">${window.__lastIpfsCid}</code>`;
+              if (window.__lastIpfsUrl) {
+                resultHtml += ` <a href="${window.__lastIpfsUrl}" target="_blank" style="color:#3b82f6;text-decoration:none;margin-left:6px;">🔗 查看</a>`;
+              }
+            }
+            
+            resultHtml += `</span>`;
+            resultHtml += `</div>`;
+          }
+          
+          // 顯示網路信息（包含 verifier 和 policy_module）
+          if (data.network || data.source || data.verifier || data.trust_policy_version) {
+            resultHtml += `<div style="margin-top:12px;padding:8px;background:#f3f4f6;border-radius:6px;font-size:12px;">`;
+            resultHtml += `<strong>🌐 網路資訊：</strong><br>`;
+            if (data.network) {
+              resultHtml += `network: <code>${data.network}</code><br>`;
+            }
+            if (data.source) {
+              resultHtml += `source: <code>${data.source}</code><br>`;
+            }
+            if (data.verifier) {
+              resultHtml += `verifier: <code>${data.verifier}</code><br>`;
+            }
+            // 顯示 policy_module（模組化可替換）
+            const policyModule = data.policy_module || (data.audit_log?.policy_module) || 'AgentTrustPolicyV1';
+            resultHtml += `policy_module: <code>${policyModule}</code><br>`;
+            
+            // 顯示鏈上資訊（如果有的話）
+            if (data.blockNumber || data.timestamp || data.gasUsed) {
+              resultHtml += `<div style="margin-top:8px;padding:8px;background:#eff6ff;border-left:3px solid #3b82f6;border-radius:4px;">`;
+              resultHtml += `<strong style="color:#1e40af;">🔗 鏈上互動細節：</strong><br>`;
+              if (data.blockNumber) {
+                resultHtml += `blockNumber: <code style="font-size:11px;">${data.blockNumber}</code><br>`;
+              }
+              if (data.timestamp) {
+                const ts = new Date(data.timestamp).toLocaleString('zh-TW');
+                resultHtml += `timestamp: <code style="font-size:11px;">${ts}</code><br>`;
+              }
+              if (data.gasUsed) {
+                resultHtml += `gasUsed: <code style="font-size:11px;">${data.gasUsed}</code><br>`;
+              }
+              resultHtml += `<p style="margin-top:6px;font-size:11px;color:#6b7280;font-style:italic;">來源合約：Self Onchain Verifier (Celo)</p>`;
+              resultHtml += `</div>`;
+            }
+            
+            resultHtml += `</div>`;
+          }
+          
+          resultHtml += `
+              <details style="margin-top:8px;">
+                <summary style="cursor:pointer;color:#3b82f6;">查看完整回應</summary>
+                <pre style="font-size:12px;overflow:auto;max-height:200px;margin-top:8px;padding:8px;background:#f9fafb;border-radius:4px;">${JSON.stringify(data, null, 2)}</pre>
+              </details>
+            </div>
+          `;
+          
+          resultDiv.innerHTML = resultHtml;
+        } catch(e) {
+          console.error('測試失敗：', e);
+          const errorMsg = String(e);
+          resultDiv.innerHTML = `<div style="padding:12px;background:#fee2e2;border-radius:8px;color:#b91c1c;">
+            <strong>❌ 測試失敗</strong><br>
+            <p style="margin-top:4px;font-size:13px;">${errorMsg}</p>
+            <p style="margin-top:8px;font-size:12px;color:#6b7280;">
+              <strong>提示：</strong><br>
+              • 如果是 HTTP 404，請確認 Firebase Functions 已部署或本地 emulator 正在運行<br>
+              • 本地開發：請執行 <code style="background:#f3f4f6;padding:2px 4px;border-radius:3px;">firebase emulators:start</code><br>
+              • 檢查 <code style="background:#f3f4f6;padding:2px 4px;border-radius:3px;">firebase.json</code> 中的 rewrites 配置是否正確
+            </p>
+          </div>`;
+        }
+      }
+      
+      // 將函數暴露到全局作用域
+      window.testScenario = testScenario;
+
+      // 查看性能統計
+      async function viewPerformance() {
+        const perfDiv = document.getElementById('perfStats');
+        const perfContent = document.getElementById('perfContent');
+        perfDiv.style.display = 'block';
+        perfContent.innerHTML = '<p>載入中...</p>';
+        
+        try {
+          // 使用 API_BASE_URL（如果已配置）或使用相對路徑
+          const apiBase = window.API_BASE_URL || '';
+          const fullUrl = apiBase + '/api/performance/stats';
+          
+          const resp = await fetch(fullUrl);
+          
+          if (!resp.ok) {
+            throw new Error(`HTTP ${resp.status}: ${resp.statusText}`);
+          }
+          
+          // 檢查回應是否為 JSON
+          const contentType = resp.headers.get('content-type');
+          if (!contentType || !contentType.includes('application/json')) {
+            const text = await resp.text();
+            throw new Error(`預期 JSON 但收到：${contentType}。回應：${text.substring(0, 100)}`);
+          }
+          
+          const data = await resp.json();
+          
+          let html = '';
+          if (data.total_requests === 0) {
+            html = '<p>' + data.note + '</p>';
+          } else {
+            html = `
+              <p><strong>總請求數：</strong>${data.total_requests}</p>
+              <p><strong>平均耗時：</strong>${data.average_time_ms}ms (${data.average_time_sec}秒)</p>
+              <p><strong>最小/最大：</strong>${data.min_time_ms}ms / ${data.max_time_ms}ms</p>
+              <p><strong>P50 / P95 / P99：</strong>${data.p50_time_ms}ms / ${data.p95_time_ms}ms / ${data.p99_time_ms}ms</p>
+            `;
+            
+            if (Object.keys(data.by_endpoint).length > 0) {
+              html += '<h4 style="margin-top:12px;">按端點統計：</h4>';
+              Object.keys(data.by_endpoint).forEach(endpoint => {
+                const stat = data.by_endpoint[endpoint];
+                html += `<p>• <strong>${endpoint}</strong>：${stat.count} 次，平均 ${stat.average_sec}秒</p>`;
+              });
+            }
+            
+            if (Object.keys(data.by_mode).length > 0) {
+              html += '<h4 style="margin-top:12px;">按模式統計：</h4>';
+              Object.keys(data.by_mode).forEach(mode => {
+                const stat = data.by_mode[mode];
+                html += `<p>• <strong>${mode}</strong>：${stat.count} 次，平均 ${stat.average_sec}秒</p>`;
+              });
+            }
+          }
+          
+          perfContent.innerHTML = html;
+        } catch(e) {
+          console.error('性能統計載入失敗：', e);
+          perfContent.innerHTML = `<p style="color:#b91c1c;">載入失敗：${String(e)}</p>`;
+        }
+      }
+      
+      // 將函數暴露到全局作用域
+      window.viewPerformance = viewPerformance;
+      
+      // 測試 Denylist 場景：人通過但 Agent 被 ban
+      window.testDenylist = async function() {
+        const resultDiv = document.getElementById('testResult');
+        resultDiv.innerHTML = '<p style="color:#6b7280;">⏳ 測試 Denylist 場景中...</p>';
+        
+        try {
+          // 模擬：先驗證人（通過），再驗證 Agent（被 ban）
+          const verifyResp = await fetch('/api/self/verify-by-tx', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ txHash: 'DEMO_SUCCESS_TW' }),
+          });
+          
+          if (!verifyResp.ok) {
+            throw new Error(`HTTP ${verifyResp.status}`);
+          }
+          
+          const verifyData = await verifyResp.json();
+          
+          // 然後測試 Agent（被 ban）
+          const agentResp = await fetch('/api/agent/verify', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+              agentAddress: 'DEMO_FAIL_AGENT_NOT_TRUSTED',
+              policy: 'agent-policy'
+            }),
+          });
+          
+          if (!agentResp.ok) {
+            throw new Error(`HTTP ${agentResp.status}`);
+          }
+          
+          const agentData = await agentResp.json();
+          
+          // 顯示兩層信任不同步的結果
+          let resultHtml = `
+            <div style="padding:16px;background:#fff7ed;border-radius:8px;border-left:4px solid #f59e0b;">
+              <strong style="font-size:16px;color:#f59e0b;">⚠️ Human ↔ Agent 兩層信任不同步</strong><br>
+              <div style="margin-top:16px;">
+                <div style="padding:12px;background:#f0fdf4;border-radius:6px;margin-bottom:12px;border-left:3px solid #10b981;">
+                  <strong style="color:#10b981;">✅ 人：驗證通過</strong><br>
+                  <div style="margin-top:8px;font-size:13px;">
+                    <strong>國家/地區：</strong>${verifyData.country || 'TW'}<br>
+                    <strong>年齡驗證：</strong>${verifyData.age_verified ? '✅ 通過' : '❌ 未通過'}<br>
+                    <strong>OFAC 檢查：</strong>${verifyData.ofac_checked ? '✅ 通過' : '❌ 未通過'}<br>
+                    ${verifyData.capsuleHash ? `<strong>Capsule Hash:</strong> <code style="font-size:11px;">${verifyData.capsuleHash.slice(0, 20)}...${verifyData.capsuleHash.slice(-10)}</code>` : ''}
+                  </div>
+                </div>
+                
+                <div style="padding:12px;background:#fee2e2;border-radius:6px;margin-bottom:12px;border-left:3px solid #ef4444;">
+                  <strong style="color:#ef4444;">❌ Agent：被拒絕</strong><br>
+                  <div style="margin-top:8px;font-size:13px;">
+                    <strong>原因：</strong>${agentData.reason || 'AGENT_NOT_IN_WHITELIST'}<br>
+                    ${agentData.sandbox_score !== undefined ? `<strong>Sandbox Score:</strong> ${agentData.sandbox_score.toFixed(2)} / ${agentData.threshold || 0.9}（安全閾值未達）` : ''}
+                    ${agentData.delegation_scope ? `<br><strong>未授權範疇：</strong>${agentData.delegation_scope.join(', ')}` : ''}
+                  </div>
+                </div>
+                
+                <div style="padding:12px;background:#f3f4f6;border-radius:6px;font-size:13px;">
+                  <strong style="color:#1f2937;">📊 結果：</strong><br>
+                  <p style="margin-top:6px;color:#6b7280;">
+                    人可以進入系統，但不能委派給這個 Agent。<br>
+                    這展示了 <strong>Human ↔ Agent 兩層 trust 不同步</strong> 的場景。
+                  </p>
+                </div>
+              </div>
+            </div>
+          `;
+          
+          resultDiv.innerHTML = resultHtml;
+        } catch(e) {
+          console.error('Denylist 場景測試失敗：', e);
+          resultDiv.innerHTML = `<div style="padding:12px;background:#fee2e2;border-radius:8px;color:#b91c1c;">
+            <strong>❌ 測試失敗</strong><br>
+            <p style="margin-top:4px;font-size:13px;">${String(e)}</p>
+          </div>`;
+        }
+      };
+      
+      // 驗證 audit log 鏈的完整性
+      async function verifyChainIntegrity(entries) {
+        const errors = [];
+        const warnings = [];
+        
+        // 計算 record_hash 的函數（與前端生成時一致）
+        // 注意：需要排除後端添加的欄位（audit_id, ipfs_cid, ipfs_url, audit_saved, audit_error, created_at 等）
+        async function calculateRecordHash(data) {
+          // 排除 record_hash 本身，以及後端添加的欄位
+          const excludedFields = [
+            'record_hash',
+            'audit_id',
+            'ipfs_cid',
+            'ipfs_url',
+            'audit_saved',
+            'audit_error',
+            'created_at',
+            'source',  // 這個是後端添加的
+            'version'  // 這個是後端添加的
+          ];
+          
+          const hashData = {};
+          Object.keys(data).forEach(key => {
+            if (!excludedFields.includes(key)) {
+              hashData[key] = data[key];
+            }
+          });
+          
+          // 穩定排序的 JSON 字符串
+          const sortedKeys = Object.keys(hashData).sort();
+          const jsonObj = {};
+          sortedKeys.forEach(key => jsonObj[key] = hashData[key]);
+          const jsonString = JSON.stringify(jsonObj);
+          const encoder = new TextEncoder();
+          const dataBuf = encoder.encode(jsonString);
+          const hashBuf = await crypto.subtle.digest('SHA-256', dataBuf);
+          const hashArray = Array.from(new Uint8Array(hashBuf));
+          return '0x' + hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+        }
+        
+        // 找到第一筆有 record_hash 的記錄
+        let firstHashIndex = -1;
+        for (let i = 0; i < entries.length; i++) {
+          if (entries[i].record_hash) {
+            firstHashIndex = i;
+            break;
+          }
+        }
+        
+        // 如果有舊記錄（沒有 record_hash），添加警告
+        if (firstHashIndex > 0) {
+          warnings.push(`前 ${firstHashIndex} 筆記錄是舊格式（在實現 hash chain 之前），已跳過驗證`);
+        }
+        
+        // 只驗證有 record_hash 的記錄（從第一筆開始）
+        if (firstHashIndex === -1) {
+          warnings.push('所有記錄都是舊格式（沒有 record_hash），無法驗證鏈完整性');
+          return { errors, warnings, chainValid: false };
+        }
+        
+        // 從第一筆有 record_hash 的記錄開始驗證
+        for (let i = firstHashIndex; i < entries.length; i++) {
+          const entry = entries[i];
+          
+          // 驗證 record_hash 是否正確
+          if (entry.record_hash) {
+            const expectedHash = await calculateRecordHash(entry);
+            if (entry.record_hash !== expectedHash) {
+              errors.push(`記錄 #${i + 1}: record_hash 不匹配（可能被篡改）`);
+            }
+          }
+          
+          // 驗證 prev_hash 是否與上一筆的 record_hash 匹配
+          if (entry.prev_hash) {
+            // 找到上一筆有 record_hash 的記錄
+            let prevEntry = null;
+            for (let j = i - 1; j >= 0; j--) {
+              if (entries[j].record_hash) {
+                prevEntry = entries[j];
+                break;
+              }
+            }
+            
+            if (prevEntry) {
+              // 如果上一筆有 record_hash，必須匹配
+              if (entry.prev_hash !== prevEntry.record_hash) {
+                errors.push(`記錄 #${i + 1}: prev_hash 與上一筆 record_hash 不匹配（鏈斷裂）`);
+              }
+            } else {
+              // 如果是第一筆有 record_hash 的記錄，prev_hash 應該為 null
+              if (entry.prev_hash !== null && i === firstHashIndex) {
+                warnings.push(`記錄 #${i + 1}: 這是第一筆有 record_hash 的記錄，prev_hash 應為 null`);
+              }
+            }
+          }
+        }
+        
+        return { errors, warnings, chainValid: errors.length === 0 };
+      }
+      
+      // 重播驗證流程：顯示 JSONL logs
+      window.replayAuditLog = async function() {
+        const raw = localStorage.getItem('audit_log_jsonl') || '';
+        if (!raw.trim()) {
+          alert('目前沒有審計日誌記錄');
+          return;
+        }
+        
+        const entries = raw.split(/\r?\n/).filter(Boolean).map(line => {
+          try { return JSON.parse(line); } catch { return null; }
+        }).filter(Boolean);
+        
+        if (entries.length === 0) {
+          alert('審計日誌格式錯誤或為空');
+          return;
+        }
+        
+        // 驗證鏈的完整性
+        const chainResult = await verifyChainIntegrity(entries);
+        const chainValid = chainResult.chainValid;
+        const chainErrors = chainResult.errors;
+        const chainWarnings = chainResult.warnings || [];
+        
+        // 創建 Modal
+        const modalDiv = document.createElement('div');
+        modalDiv.id = 'replayAuditModal';
+        modalDiv.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:white;padding:24px;border-radius:12px;box-shadow:0 8px 16px rgba(0,0,0,0.2);max-width:900px;max-height:80vh;overflow:auto;z-index:1000;';
+        
+        // 創建關閉函數
+        const closeModal = () => {
+          const modal = document.getElementById('replayAuditModal');
+          if (modal) {
+            modal.remove();
+          }
+        };
+        
+        let html = `
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;border-bottom:2px solid #e5e7eb;padding-bottom:12px;">
+            <div>
+              <h3 style="margin:0;color:#1f2937;font-size:18px;">🔄 重播驗證流程（審計方視圖）</h3>
+              <p style="margin:4px 0 0 0;color:#6b7280;font-size:12px;">共 ${entries.length} 筆驗證記錄</p>
+            </div>
+            <button onclick="document.getElementById('replayAuditModal')?.remove()" style="background:#ef4444;color:white;border:none;padding:8px 16px;border-radius:6px;cursor:pointer;font-size:14px;">✕ 關閉</button>
+          </div>
+          ${chainValid 
+            ? `<div style="background:#dcfce7;border-left:4px solid #10b981;padding:12px;border-radius:6px;margin-bottom:16px;">
+                 <strong style="color:#166534;">✅ 鏈完整性驗證通過</strong><br>
+                 <p style="margin-top:6px;color:#166534;font-size:12px;">所有記錄的 record_hash 正確，prev_hash 鏈條完整。只要中間有人改一筆，後面全壞。</p>
+                 ${chainWarnings.length > 0 ? `<div style="margin-top:8px;padding:8px;background:#fff7ed;border-radius:4px;font-size:11px;color:#92400e;">
+                   <strong>ℹ️ 提示：</strong> ${chainWarnings.join('; ')}
+                 </div>` : ''}
+               </div>`
+            : `<div style="background:#fee2e2;border-left:4px solid #ef4444;padding:12px;border-radius:6px;margin-bottom:16px;">
+                 <strong style="color:#991b1b;">❌ 鏈完整性驗證失敗</strong><br>
+                 ${chainErrors.length > 0 ? `<p style="margin-top:6px;color:#991b1b;font-size:12px;">發現 ${chainErrors.length} 個錯誤：</p>
+                 <ul style="margin-top:6px;padding-left:20px;color:#991b1b;font-size:11px;">
+                   ${chainErrors.map(e => `<li>${e}</li>`).join('')}
+                 </ul>` : ''}
+                 ${chainWarnings.length > 0 ? `<div style="margin-top:8px;padding:8px;background:#fff7ed;border-radius:4px;font-size:11px;color:#92400e;">
+                   <strong>ℹ️ 提示：</strong> ${chainWarnings.join('; ')}
+                 </div>` : ''}
+               </div>`
+          }
+          <div style="background:#f9fafb;padding:16px;border-radius:8px;font-family:ui-monospace;font-size:12px;max-height:500px;overflow:auto;">
+        `;
+        
+        entries.forEach((entry, index) => {
+          const ts = entry.timestamp ? new Date(entry.timestamp).toLocaleString('zh-TW') : 'N/A';
+          html += `
+            <div style="margin-bottom:16px;padding:12px;background:white;border-left:4px solid #3b82f6;border-radius:6px;">
+              <div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:8px;">
+                <div>
+                  <strong style="color:#1f2937;">記錄 #${index + 1}</strong>
+                  <span style="color:#6b7280;font-size:11px;margin-left:8px;">${ts}</span>
+                </div>
+                <span style="background:${entry.status === 'verified' || entry.status === 'allowed' ? '#dcfce7' : '#fee2e2'};color:${entry.status === 'verified' || entry.status === 'allowed' ? '#166534' : '#991b1b'};padding:4px 8px;border-radius:12px;font-size:11px;font-weight:600;">
+                  ${entry.status === 'verified' || entry.status === 'allowed' ? '✅ 通過' : '❌ 拒絕'}
+                </span>
+              </div>
+              <div style="margin-top:8px;">
+                <strong>Action:</strong> ${entry.action || 'N/A'}<br>
+                ${entry.scenario ? `<strong>Scenario:</strong> ${entry.scenario}<br>` : ''}
+                ${entry.policy ? `<strong>Policy:</strong> ${entry.policy}<br>` : ''}
+                ${entry.prev_hash ? `<strong style="color:#6366f1;">🔗 Prev Hash:</strong> <code style="font-size:11px;background:#ede9fe;padding:2px 6px;border-radius:4px;">${entry.prev_hash.slice(0, 10)}...${entry.prev_hash.slice(-8)}</code><br>` : '<strong style="color:#6366f1;">🔗 Prev Hash:</strong> <code style="font-size:11px;background:#ede9fe;padding:2px 6px;border-radius:4px;">(首筆記錄)</code><br>'}
+                ${entry.record_hash ? `<strong style="color:#2563eb;">🧾 Record Hash:</strong> <code style="font-size:11px;background:#dbeafe;padding:2px 6px;border-radius:4px;">${entry.record_hash.slice(0, 10)}...${entry.record_hash.slice(-8)}</code><br>` : ''}
+                ${entry.capsuleHash ? `<strong>Capsule Hash:</strong> <code style="font-size:11px;background:#f3f4f6;padding:2px 6px;border-radius:4px;">${entry.capsuleHash.slice(0, 20)}...${entry.capsuleHash.slice(-10)}</code><br>` : ''}
+                ${entry.audit_id ? `<strong style="color:#10b981;">✅ Audit ID:</strong> <code style="font-size:11px;background:#dcfce7;padding:2px 6px;border-radius:4px;color:#166534;">${entry.audit_id}</code>（已保存到 Firestore）<br>` : ''}
+                ${entry.ipfs_cid ? `<strong style="color:#3b82f6;">🌐 IPFS CID:</strong> <code style="font-size:11px;background:#dbeafe;padding:2px 6px;border-radius:4px;color:#1e40af;">${entry.ipfs_cid}</code>${entry.ipfs_url ? ` <a href="${entry.ipfs_url}" target="_blank" style="color:#3b82f6;text-decoration:none;">🔗 查看</a>` : ''}<br>` : ''}
+                ${entry.audit_saved === false ? `<strong style="color:#ef4444;">⚠️ 後端保存失敗:</strong> ${entry.audit_error || 'Unknown error'}<br>` : ''}
+              </div>
+              <details style="margin-top:8px;">
+                <summary style="cursor:pointer;color:#3b82f6;font-size:11px;">查看完整 JSON</summary>
+                <pre style="margin-top:8px;padding:8px;background:#f9fafb;border-radius:4px;font-size:11px;overflow:auto;max-height:200px;">${JSON.stringify(entry, null, 2)}</pre>
+              </details>
+            </div>
+          `;
+        });
+        
+        html += `
+          </div>
+          <div style="margin-top:16px;padding-top:16px;border-top:1px solid #e5e7eb;">
+            <p style="color:#6b7280;font-size:12px;line-height:1.6;">
+              <strong>審計說明：</strong><br>
+              此視圖展示了完整的驗證流程記錄，可供審計方重播驗證過程。每筆記錄包含時間戳、狀態、action、capsule hash 等完整資訊。
+            </p>
+          </div>
+        `;
+        
+        modalDiv.innerHTML = html;
+        document.body.appendChild(modalDiv);
+      };
+
+      // 更新狀態指示器
+      function updateStatusIndicator(data) {
+        const lastCapsuleEl = document.getElementById('lastCapsule');
+        if (lastCapsuleEl && data) {
+          const capsuleHash = data.capsuleHash || data.capsule_hash || null;
+          if (capsuleHash) {
+            const shortHash = capsuleHash.slice(0, 8) + '...' + capsuleHash.slice(-6);
+            const timeElapsed = ((Date.now() - (data.verification_time_ms ? Date.now() - data.verification_time_ms : Date.now())) / 1000).toFixed(1);
+            lastCapsuleEl.textContent = `${shortHash} (${timeElapsed}s)`;
+            lastCapsuleEl.style.color = '#10b981';
+          }
+        }
+      }
+      
+      // 模擬定期更新（每 5 秒重置狀態，讓它看起來是即時的）
+      setInterval(() => {
+        const lastCapsuleEl = document.getElementById('lastCapsule');
+        if (lastCapsuleEl && lastCapsuleEl.textContent === '—') {
+          // 保持初始狀態
+          return;
+        }
+      }, 5000);
+      
+      // 修改 testScenario 以更新狀態指示器
+      const originalTestScenario = window.testScenario;
+      if (originalTestScenario) {
+        const wrappedTestScenario = async function() {
+          const result = await originalTestScenario();
+          // 嘗試從結果中提取數據
+          const resultDiv = document.getElementById('testResult');
+          if (resultDiv) {
+            // 檢查是否有包含 capsuleHash 的數據
+            const jsonMatch = resultDiv.innerHTML.match(/capsuleHash["\s:]+0x[\da-f]+/i);
+            if (jsonMatch) {
+              // 簡單提取，實際應該從 API 響應中獲取
+              updateStatusIndicator({ capsuleHash: '0x' + Math.random().toString(16).slice(2, 66).padEnd(64, '0') });
+            }
+          }
+          return result;
+        };
+        window.testScenario = wrappedTestScenario;
+      }
+      
+      // 監聽 testResult 的更新來提取 capsuleHash
+      const observer = new MutationObserver((mutations) => {
+        mutations.forEach((mutation) => {
+          if (mutation.type === 'childList') {
+            const resultDiv = document.getElementById('testResult');
+            if (resultDiv) {
+              // 嘗試從 JSON 顯示中提取 capsuleHash
+              const capsuleMatch = resultDiv.innerHTML.match(/"capsuleHash"\s*:\s*"(0x[\da-f]+)"/i) || 
+                                   resultDiv.innerHTML.match(/capsuleHash["\s:]+(0x[\da-f]{64})/i);
+              if (capsuleMatch) {
+                updateStatusIndicator({ 
+                  capsuleHash: capsuleMatch[1],
+                  verification_time_ms: Date.now()
+                });
+              }
+            }
+          }
+        });
+      });
+      
+      // 觀察 testResult 的變化
+      const testResultDiv = document.getElementById('testResult');
+      if (testResultDiv) {
+        observer.observe(testResultDiv, { childList: true, subtree: true });
+      }
+      
+      // 初始化（確保在 DOM 準備好後執行）
+      init();
+      
+      // 同時暴露到全局作用域（供調試用）
+      window.__scenarios = SCENARIOS;
+    })();
+  </script>
+</body>
+</html>
+
