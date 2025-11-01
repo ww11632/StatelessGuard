@@ -1,0 +1,38 @@
+# Environment variables
+.env
+*.env
+.env.local
+.env.*.local
+
+# Firebase
+firebase-debug.log
+firestore-debug.log
+.firebase/
+.firebaserc.local
+
+# Dependencies
+node_modules/
+package-lock.json
+
+# Build outputs
+lib/
+*.log
+*.pid
+*.seed
+*.pid.lock
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.temp
+
